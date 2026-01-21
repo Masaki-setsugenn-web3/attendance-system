@@ -272,17 +272,6 @@ export default function Attendance() {
           <Label htmlFor="late" className="text-sm">遅刻</Label>
         </div>
 
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <MapPin className="w-4 h-4" />
-          {location ? (
-            <span>位置情報: 取得済み</span>
-          ) : locationError ? (
-            <span className="text-destructive">{locationError}</span>
-          ) : (
-            <span>位置情報を取得中...</span>
-          )}
-        </div>
-
         <Button
           onClick={handleClockIn}
           className="w-full h-12 text-lg"
@@ -414,17 +403,6 @@ export default function Attendance() {
               onCheckedChange={(checked) => setIsEarlyLeave(checked === true)}
             />
             <Label htmlFor="earlyLeave" className="text-sm">早退</Label>
-          </div>
-
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <MapPin className="w-4 h-4" />
-            {location ? (
-              <span>位置情報: 取得済み</span>
-            ) : locationError ? (
-              <span className="text-destructive">{locationError}</span>
-            ) : (
-              <span>位置情報を取得中...</span>
-            )}
           </div>
 
           <Button
