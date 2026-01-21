@@ -15,6 +15,13 @@
       "when": 1768995755713,
       "tag": "0001_moaning_warlock",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1769000087238,
+      "tag": "0002_empty_vulcan",
+      "breakpoints": true
     }
   ]
 }

@@ -35,13 +35,19 @@ export const appRouter = router({
 
   // 従業員関連API
   employee: router({
-    // 従業員登録または取得
-    register: publicProcedure
-      .input(z.object({ name: z.string().min(1).max(100) }))
+    // 従業員ログイン（従業員番号+パスワード）
+    login: publicProcedure
+      .input(z.object({ 
+        employeeNumber: z.string().min(1),
+        password: z.string().min(1)
+      }))
       .mutation(async ({ input }) => {
-        let employee = await db.getEmployeeByName(input.name);
+        // 初期従業員データを登録
+        await db.initializeEmployees();
+        
+        const employee = await db.authenticateEmployee(input.employeeNumber, input.password);
         if (!employee) {
-          employee = await db.createEmployee({ name: input.name });
+          throw new Error("従業員番号またはパスワードが正しくありません");
         }
         return employee;
       }),
@@ -51,6 +57,13 @@ export const appRouter = router({
       .input(z.object({ name: z.string() }))
       .query(async ({ input }) => {
         return db.getEmployeeByName(input.name);
+      }),
+
+    // IDで取得
+    getById: publicProcedure
+      .input(z.object({ id: z.number() }))
+      .query(async ({ input }) => {
+        return db.getEmployeeById(input.id);
       }),
 
     // 全従業員取得

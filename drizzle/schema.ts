@@ -19,10 +19,12 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
 /**
- * 従業員テーブル - 認証なしで従業員名のみで識別
+ * 従業員テーブル - 従業員番号とパスワードで認証
  */
 export const employees = mysqlTable("employees", {
   id: int("id").autoincrement().primaryKey(),
+  employeeNumber: varchar("employeeNumber", { length: 20 }).notNull().unique(),
+  password: varchar("password", { length: 100 }).notNull(),
   name: varchar("name", { length: 100 }).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

@@ -115,6 +115,39 @@ export async function getEmployeeByName(name: string): Promise<Employee | undefi
   return result[0];
 }
 
+export async function getEmployeeByNumber(employeeNumber: string): Promise<Employee | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.select().from(employees).where(eq(employees.employeeNumber, employeeNumber)).limit(1);
+  return result[0];
+}
+
+export async function authenticateEmployee(employeeNumber: string, password: string): Promise<Employee | null> {
+  const employee = await getEmployeeByNumber(employeeNumber);
+  if (!employee) return null;
+  if (employee.password !== password) return null;
+  return employee;
+}
+
+export async function initializeEmployees(): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const initialEmployees = [
+    { employeeNumber: "001", password: "y820", name: "百瀠友奈" },
+    { employeeNumber: "002", password: "m110", name: "中井真樹" },
+    { employeeNumber: "A-003", password: "m212", name: "高橋美月" },
+  ];
+  
+  for (const emp of initialEmployees) {
+    const existing = await getEmployeeByNumber(emp.employeeNumber);
+    if (!existing) {
+      await db.insert(employees).values(emp);
+    }
+  }
+}
+
 export async function getEmployeeById(id: number): Promise<Employee | undefined> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");

@@ -5,6 +5,9 @@ import type { TrpcContext } from "./_core/context";
 // Mock the database functions
 vi.mock("./db", () => ({
   getEmployeeByName: vi.fn(),
+  getEmployeeByNumber: vi.fn(),
+  authenticateEmployee: vi.fn(),
+  initializeEmployees: vi.fn(),
   createEmployee: vi.fn(),
   getAllEmployees: vi.fn(),
   getAttendanceByEmployeeAndDate: vi.fn(),
@@ -45,45 +48,40 @@ describe("employee router", () => {
     vi.clearAllMocks();
   });
 
-  it("registers a new employee", async () => {
+  it("logs in with correct credentials", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
-    vi.mocked(db.getEmployeeByName).mockResolvedValue(undefined);
-    vi.mocked(db.createEmployee).mockResolvedValue({
+    vi.mocked(db.initializeEmployees).mockResolvedValue();
+    vi.mocked(db.authenticateEmployee).mockResolvedValue({
       id: 1,
-      name: "テスト太郎",
+      employeeNumber: "001",
+      password: "y820",
+      name: "百瀠友奈",
       createdAt: new Date(),
       updatedAt: new Date(),
     });
 
-    const result = await caller.employee.register({ name: "テスト太郎" });
+    const result = await caller.employee.login({ employeeNumber: "001", password: "y820" });
 
     expect(result).toEqual(
       expect.objectContaining({
         id: 1,
-        name: "テスト太郎",
+        name: "百瀠友奈",
       })
     );
-    expect(db.createEmployee).toHaveBeenCalledWith({ name: "テスト太郎" });
   });
 
-  it("returns existing employee if name already exists", async () => {
+  it("throws error with incorrect credentials", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
 
-    const existingEmployee = {
-      id: 1,
-      name: "テスト太郎",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    vi.mocked(db.getEmployeeByName).mockResolvedValue(existingEmployee);
+    vi.mocked(db.initializeEmployees).mockResolvedValue();
+    vi.mocked(db.authenticateEmployee).mockResolvedValue(null);
 
-    const result = await caller.employee.register({ name: "テスト太郎" });
-
-    expect(result).toEqual(existingEmployee);
-    expect(db.createEmployee).not.toHaveBeenCalled();
+    await expect(
+      caller.employee.login({ employeeNumber: "001", password: "wrong" })
+    ).rejects.toThrow("従業員番号またはパスワードが正しくありません");
   });
 });
 

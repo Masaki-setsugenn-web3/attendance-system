@@ -2,26 +2,37 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
-import { useLocation } from "wouter";
-import { User, Loader2 } from "lucide-react";
+import { useLocation, Link } from "wouter";
+import { User, Loader2, Shield, Eye, EyeOff } from "lucide-react";
+import { toast } from "sonner";
 
 export default function EmployeeSetup() {
-  const [name, setName] = useState("");
+  const [employeeNumber, setEmployeeNumber] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [, setLocation] = useLocation();
-  
-  const registerMutation = trpc.employee.register.useMutation({
+
+  const loginMutation = trpc.employee.login.useMutation({
     onSuccess: (employee) => {
       localStorage.setItem("employeeId", employee.id.toString());
       localStorage.setItem("employeeName", employee.name);
+      toast.success(`ようこそ ${employee.name} さん！`);
       setLocation("/attendance");
+    },
+    onError: (error) => {
+      toast.error(error.message);
     },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (name.trim()) {
-      registerMutation.mutate({ name: name.trim() });
+    if (employeeNumber.trim() && password.trim()) {
+      loginMutation.mutate({ 
+        employeeNumber: employeeNumber.trim(),
+        password: password.trim()
+      });
     }
   };
 
@@ -32,43 +43,75 @@ export default function EmployeeSetup() {
           <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
             <User className="w-8 h-8 text-primary" />
           </div>
-          <CardTitle className="text-2xl">勤怠管理システム</CardTitle>
+          <CardTitle className="text-2xl font-accent">勤怠管理システム</CardTitle>
           <CardDescription>
-            従業員名を入力して開始してください
+            従業員番号とパスワードを入力してください
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
+              <Label htmlFor="employeeNumber">従業員番号</Label>
               <Input
+                id="employeeNumber"
                 type="text"
-                placeholder="従業員名を入力"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="text-lg h-12"
-                disabled={registerMutation.isPending}
+                placeholder="例: 001"
+                value={employeeNumber}
+                onChange={(e) => setEmployeeNumber(e.target.value)}
+                className="mt-1"
+                disabled={loginMutation.isPending}
               />
             </div>
-            <Button 
-              type="submit" 
-              className="w-full h-12 text-lg"
-              disabled={!name.trim() || registerMutation.isPending}
+            <div>
+              <Label htmlFor="password">パスワード</Label>
+              <div className="relative mt-1">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  placeholder="パスワードを入力"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pr-10"
+                  disabled={loginMutation.isPending}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full px-3"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" />
+                  ) : (
+                    <Eye className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
+            </div>
+            <Button
+              type="submit"
+              className="w-full h-12"
+              disabled={!employeeNumber.trim() || !password.trim() || loginMutation.isPending}
             >
-              {registerMutation.isPending ? (
+              {loginMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                  登録中...
+                  ログイン中...
                 </>
               ) : (
-                "開始する"
+                "ログイン"
               )}
             </Button>
           </form>
-          {registerMutation.error && (
-            <p className="mt-4 text-sm text-destructive text-center">
-              {registerMutation.error.message}
-            </p>
-          )}
+          <div className="mt-6 pt-4 border-t">
+            <Link href="/admin">
+              <Button variant="ghost" className="w-full text-muted-foreground">
+                <Shield className="w-4 h-4 mr-2" />
+                管理者ログイン
+              </Button>
+            </Link>
+          </div>
         </CardContent>
       </Card>
     </div>
