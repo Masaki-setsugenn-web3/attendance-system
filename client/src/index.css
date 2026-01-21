@@ -121,9 +121,6 @@
     @apply bg-background text-foreground;
     font-family: 'Noto Sans JP', sans-serif;
   }
-  .font-accent {
-    font-family: 'Dela Gothic One', cursive;
-  }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),
   [type="button"]:not(:disabled),

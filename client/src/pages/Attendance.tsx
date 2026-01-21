@@ -500,7 +500,7 @@ export default function Attendance() {
         <div className="container py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-lg font-accent">勤怠管理</h1>
+              <h1 className="text-lg font-semibold">勤怠管理</h1>
               <p className="text-sm opacity-90">ようこそ {employeeName} さん！</p>
             </div>
             <div className="flex items-center gap-2">

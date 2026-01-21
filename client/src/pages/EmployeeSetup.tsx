@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { useLocation, Link } from "wouter";
-import { User, Loader2, Shield, Eye, EyeOff } from "lucide-react";
+import { Loader2, Shield, Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 export default function EmployeeSetup() {
@@ -40,10 +40,10 @@ export default function EmployeeSetup() {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-            <User className="w-8 h-8 text-primary" />
+          <div className="mx-auto w-20 h-20 rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#223025' }}>
+            <img src="/logo.png" alt="Logo" className="w-12 h-12 object-contain" />
           </div>
-          <CardTitle className="text-2xl font-accent">勤怠管理システム</CardTitle>
+          <CardTitle className="text-2xl">勤怠管理システム</CardTitle>
           <CardDescription>
             従業員番号とパスワードを入力してください
           </CardDescription>
