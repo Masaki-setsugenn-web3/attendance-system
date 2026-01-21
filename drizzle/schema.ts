@@ -1,17 +1,10 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean, decimal } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +18,88 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * 従業員テーブル - 認証なしで従業員名のみで識別
+ */
+export const employees = mysqlTable("employees", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Employee = typeof employees.$inferSelect;
+export type InsertEmployee = typeof employees.$inferInsert;
+
+/**
+ * 勤怠記録テーブル
+ */
+export const attendanceRecords = mysqlTable("attendance_records", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  date: varchar("date", { length: 10 }).notNull(), // YYYY-MM-DD形式
+  
+  // 出勤情報
+  clockInTime: timestamp("clockInTime"),
+  clockInLatitude: decimal("clockInLatitude", { precision: 10, scale: 7 }),
+  clockInLongitude: decimal("clockInLongitude", { precision: 10, scale: 7 }),
+  todayGoal: text("todayGoal"),
+  isLate: boolean("isLate").default(false),
+  
+  // 退勤情報
+  clockOutTime: timestamp("clockOutTime"),
+  clockOutLatitude: decimal("clockOutLatitude", { precision: 10, scale: 7 }),
+  clockOutLongitude: decimal("clockOutLongitude", { precision: 10, scale: 7 }),
+  reflection: text("reflection"),
+  isEarlyLeave: boolean("isEarlyLeave").default(false),
+  
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AttendanceRecord = typeof attendanceRecords.$inferSelect;
+export type InsertAttendanceRecord = typeof attendanceRecords.$inferInsert;
+
+/**
+ * タスクテーブル - 出勤時に登録、退勤時に完了チェック
+ */
+export const tasks = mysqlTable("tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  attendanceId: int("attendanceId").notNull(),
+  content: text("content").notNull(),
+  isCompleted: boolean("isCompleted").default(false),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = typeof tasks.$inferInsert;
+
+/**
+ * 中抜けテーブル
+ */
+export const breaks = mysqlTable("breaks", {
+  id: int("id").autoincrement().primaryKey(),
+  attendanceId: int("attendanceId").notNull(),
+  startTime: timestamp("startTime").notNull(),
+  endTime: timestamp("endTime"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type Break = typeof breaks.$inferSelect;
+export type InsertBreak = typeof breaks.$inferInsert;
+
+/**
+ * 管理者設定テーブル
+ */
+export const adminSettings = mysqlTable("admin_settings", {
+  id: int("id").autoincrement().primaryKey(),
+  settingKey: varchar("settingKey", { length: 50 }).notNull().unique(),
+  settingValue: text("settingValue").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AdminSetting = typeof adminSettings.$inferSelect;
+export type InsertAdminSetting = typeof adminSettings.$inferInsert;
