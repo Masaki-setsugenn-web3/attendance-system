@@ -396,6 +396,95 @@ export const appRouter = router({
         }
         return db.getAllEmployees();
       }),
+
+    // Googleスプレッドシートに出力
+    exportToSpreadsheet: publicProcedure
+      .input(z.object({
+        token: z.string(),
+        yearMonth: z.string(), // YYYY-MM形式
+      }))
+      .mutation(async ({ input }) => {
+        if (!isValidAdminSession(input.token)) {
+          throw new Error("認証が必要です");
+        }
+
+        // 指定月の開始日と終了日を計算
+        const [year, month] = input.yearMonth.split('-').map(Number);
+        const startDate = `${input.yearMonth}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const endDate = `${input.yearMonth}-${lastDay.toString().padStart(2, '0')}`;
+
+        // 勤怠データを取得
+        const records = await db.getAllAttendanceByDateRange(startDate, endDate);
+        
+        // GASに送信するデータを整形
+        const exportRecords = await Promise.all(records.map(async (record) => {
+          const tasks = await db.getTasksByAttendanceId(record.id);
+          const breaks = await db.getBreaksByAttendanceId(record.id);
+          const employee = await db.getEmployeeById(record.employeeId);
+          
+          // 勤務時間を計算（分）
+          let workDuration = 0;
+          if (record.clockInTime && record.clockOutTime) {
+            const clockIn = new Date(record.clockInTime).getTime();
+            const clockOut = new Date(record.clockOutTime).getTime();
+            workDuration = Math.round((clockOut - clockIn) / 60000);
+          }
+
+          // 中抜け時間を計算（分）
+          let totalBreakMinutes = 0;
+          for (const breakRecord of breaks) {
+            if (breakRecord.startTime && breakRecord.endTime) {
+              const start = new Date(breakRecord.startTime).getTime();
+              const end = new Date(breakRecord.endTime).getTime();
+              totalBreakMinutes += Math.round((end - start) / 60000);
+            }
+          }
+
+          // 位置情報をフォーマット
+          const clockInLocation = record.clockInLatitude && record.clockInLongitude
+            ? `${record.clockInLatitude},${record.clockInLongitude}`
+            : '';
+          const clockOutLocation = record.clockOutLatitude && record.clockOutLongitude
+            ? `${record.clockOutLatitude},${record.clockOutLongitude}`
+            : '';
+
+          return {
+            date: record.date,
+            employeeName: employee?.name || '',
+            clockIn: record.clockInTime?.toISOString(),
+            clockOut: record.clockOutTime?.toISOString(),
+            workDuration: workDuration > 0 ? workDuration - totalBreakMinutes : 0,
+            isLate: record.isLate,
+            isEarlyLeave: record.isEarlyLeave,
+            goal: record.todayGoal || '',
+            tasks: tasks.map(t => ({ text: t.content, completed: t.isCompleted })),
+            reflection: record.reflection || '',
+            clockInLocation,
+            clockOutLocation,
+            totalBreakMinutes,
+          };
+        }));
+
+        // GASにデータを送信
+        const GAS_URL = 'https://script.google.com/macros/s/AKfycbxSX21uVt2yn0bvxekOmoCsRFiC_vEhIW-sX-hAODoIjC8NF-j0PRwfDoGKp-U6K1wnAQ/exec';
+        
+        const response = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ records: exportRecords }),
+        });
+
+        const result = await response.json();
+        
+        if (!result.success) {
+          throw new Error(result.error || 'スプレッドシートへの出力に失敗しました');
+        }
+
+        return { success: true, count: exportRecords.length };
+      }),
   }),
 });
 

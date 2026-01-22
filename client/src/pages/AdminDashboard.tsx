@@ -24,7 +24,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, Link } from "wouter";
 import {
   ArrowLeft, Calendar, MapPin, Settings, LogOut,
-  Loader2, Edit, Users, Clock, ExternalLink
+  Loader2, Edit, Users, Clock, ExternalLink, FileSpreadsheet
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -59,6 +59,10 @@ export default function AdminDashboard() {
     clockOutTime: "",
     isLate: false,
     isEarlyLeave: false,
+  });
+  const [exportMonth, setExportMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
 
   useEffect(() => {
@@ -104,6 +108,21 @@ export default function AdminDashboard() {
       setLocation("/admin");
     },
   });
+
+  const exportMutation = trpc.admin.exportToSpreadsheet.useMutation({
+    onSuccess: (data) => {
+      toast.success(`${data.count}件のデータをスプレッドシートに出力しました`);
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleExport = () => {
+    if (adminToken && exportMonth) {
+      exportMutation.mutate({ token: adminToken, yearMonth: exportMonth });
+    }
+  };
 
   const handleLogout = () => {
     if (adminToken) {
@@ -200,17 +219,45 @@ export default function AdminDashboard() {
 
       {/* メインコンテンツ */}
       <main className="container py-6 space-y-6">
-        {/* 日付選択 */}
+        {/* 日付選択とエクスポート */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex items-center gap-4">
-              <Calendar className="w-5 h-5 text-muted-foreground" />
-              <Input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-auto"
-              />
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <div className="flex items-center gap-4">
+                <Calendar className="w-5 h-5 text-muted-foreground" />
+                <Input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="w-auto"
+                />
+              </div>
+              <div className="flex items-center gap-2 sm:ml-auto">
+                <FileSpreadsheet className="w-5 h-5 text-muted-foreground" />
+                <Input
+                  type="month"
+                  value={exportMonth}
+                  onChange={(e) => setExportMonth(e.target.value)}
+                  className="w-auto"
+                />
+                <Button
+                  onClick={handleExport}
+                  disabled={exportMutation.isPending}
+                  className="whitespace-nowrap"
+                >
+                  {exportMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      出力中...
+                    </>
+                  ) : (
+                    <>
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      スプレッドシートに出力
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
