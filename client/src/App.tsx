@@ -11,6 +11,7 @@ import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminMap from "./pages/AdminMap";
 import AdminSettings from "./pages/AdminSettings";
+import AdminTeamTasks from "./pages/AdminTeamTasks";
 
 function Router() {
   return (
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/admin/dashboard" component={AdminDashboard} />
       <Route path="/admin/map" component={AdminMap} />
       <Route path="/admin/settings" component={AdminSettings} />
+      <Route path="/admin/team-tasks" component={AdminTeamTasks} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

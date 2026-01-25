@@ -6,7 +6,8 @@ import {
   attendanceRecords, InsertAttendanceRecord, AttendanceRecord,
   tasks, InsertTask, Task,
   breaks, InsertBreak, Break,
-  adminSettings, InsertAdminSetting
+  adminSettings, InsertAdminSetting,
+  teamTasks, InsertTeamTask, TeamTask
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -360,4 +361,70 @@ export async function initializeAdminPassword(): Promise<void> {
   if (!existingPassword) {
     await setAdminSetting("admin_password", "admin123");
   }
+}
+
+// ========== Team Task Functions ==========
+export async function createTeamTask(data: InsertTeamTask): Promise<TeamTask> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(teamTasks).values(data);
+  const insertId = result[0].insertId;
+  const [task] = await db.select().from(teamTasks).where(eq(teamTasks.id, insertId));
+  return task;
+}
+
+export async function updateTeamTask(id: number, data: Partial<InsertTeamTask>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(teamTasks).set(data).where(eq(teamTasks.id, id));
+}
+
+export async function deleteTeamTask(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(teamTasks).where(eq(teamTasks.id, id));
+}
+
+export async function getTeamTasksByPeriod(taskType: "weekly" | "monthly", period: string): Promise<TeamTask[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return db.select()
+    .from(teamTasks)
+    .where(and(
+      eq(teamTasks.taskType, taskType),
+      eq(teamTasks.period, period),
+      eq(teamTasks.isActive, true)
+    ))
+    .orderBy(desc(teamTasks.createdAt));
+}
+
+export async function getAllTeamTasks(): Promise<TeamTask[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return db.select()
+    .from(teamTasks)
+    .orderBy(desc(teamTasks.createdAt));
+}
+
+export async function getActiveTeamTasks(): Promise<TeamTask[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return db.select()
+    .from(teamTasks)
+    .where(eq(teamTasks.isActive, true))
+    .orderBy(desc(teamTasks.createdAt));
+}
+
+export async function getTeamTaskById(id: number): Promise<TeamTask | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.select().from(teamTasks).where(eq(teamTasks.id, id)).limit(1);
+  return result[0];
 }

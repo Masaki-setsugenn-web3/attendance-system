@@ -24,7 +24,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, Link } from "wouter";
 import {
   ArrowLeft, Calendar, MapPin, Settings, LogOut,
-  Loader2, Edit, Users, Clock, ExternalLink, FileSpreadsheet
+  Loader2, Edit, Users, Clock, ExternalLink, FileSpreadsheet, ListTodo
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -194,6 +194,11 @@ export default function AdminDashboard() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <Link href="/admin/team-tasks">
+                <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
+                  <ListTodo className="w-5 h-5" />
+                </Button>
+              </Link>
               <Link href="/admin/map">
                 <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
                   <MapPin className="w-5 h-5" />

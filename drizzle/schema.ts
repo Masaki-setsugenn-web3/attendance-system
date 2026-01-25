@@ -105,3 +105,22 @@ export const adminSettings = mysqlTable("admin_settings", {
 
 export type AdminSetting = typeof adminSettings.$inferSelect;
 export type InsertAdminSetting = typeof adminSettings.$inferInsert;
+
+/**
+ * チームタスクテーブル - 管理者が設定する週間/月間タスク
+ */
+export const teamTasks = mysqlTable("team_tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description"),
+  taskType: mysqlEnum("taskType", ["weekly", "monthly"]).notNull(),
+  // 週間タスクの場合: YYYY-Www形式（例: 2026-W04）
+  // 月間タスクの場合: YYYY-MM形式（例: 2026-01）
+  period: varchar("period", { length: 10 }).notNull(),
+  isActive: boolean("isActive").default(true),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TeamTask = typeof teamTasks.$inferSelect;
+export type InsertTeamTask = typeof teamTasks.$inferInsert;

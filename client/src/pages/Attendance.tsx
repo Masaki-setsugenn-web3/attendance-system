@@ -9,7 +9,7 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, Link } from "wouter";
 import { 
   Clock, LogIn, LogOut, Coffee, Plus, X, MapPin, 
-  Loader2, History, Settings, CheckCircle2, AlertCircle
+  Loader2, History, Settings, CheckCircle2, AlertCircle, Target, Calendar
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -123,6 +123,9 @@ export default function Attendance() {
       toast.error(error.message);
     },
   });
+
+  // チームタスクを取得
+  const { data: teamTasksData } = trpc.teamTask.getCurrent.useQuery();
 
   const handleClockIn = () => {
     if (!employeeId) return;
@@ -532,6 +535,56 @@ export default function Attendance() {
             })}
           </p>
         </div>
+
+        {/* チームタスク表示 */}
+        {(teamTasksData?.weeklyTasks?.length || teamTasksData?.monthlyTasks?.length) ? (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="w-5 h-5 text-primary" />
+                チームタスク
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {teamTasksData?.weeklyTasks && teamTasksData.weeklyTasks.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calendar className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-muted-foreground">今週のタスク</span>
+                  </div>
+                  <div className="space-y-2">
+                    {teamTasksData.weeklyTasks.map((task) => (
+                      <div key={task.id} className="bg-background rounded-lg p-3 border">
+                        <p className="font-medium">{task.title}</p>
+                        {task.description && (
+                          <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {teamTasksData?.monthlyTasks && teamTasksData.monthlyTasks.length > 0 && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Target className="w-4 h-4 text-muted-foreground" />
+                    <span className="text-sm font-medium text-muted-foreground">今月のタスク</span>
+                  </div>
+                  <div className="space-y-2">
+                    {teamTasksData.monthlyTasks.map((task) => (
+                      <div key={task.id} className="bg-background rounded-lg p-3 border">
+                        <p className="font-medium">{task.title}</p>
+                        {task.description && (
+                          <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
 
         {/* 状態に応じた表示 */}
         {todayStatus?.status === "not_clocked_in" && renderClockInForm()}

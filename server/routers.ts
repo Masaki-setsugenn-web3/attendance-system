@@ -486,6 +486,119 @@ export const appRouter = router({
         return { success: true, count: exportRecords.length };
       }),
   }),
+
+  // チームタスク関連API
+  teamTask: router({
+    // チームタスク作成（管理者のみ）
+    create: publicProcedure
+      .input(z.object({
+        token: z.string(),
+        title: z.string().min(1),
+        description: z.string().optional(),
+        taskType: z.enum(["weekly", "monthly"]),
+        period: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        if (!isValidAdminSession(input.token)) {
+          throw new Error("認証が必要です");
+        }
+        
+        return db.createTeamTask({
+          title: input.title,
+          description: input.description,
+          taskType: input.taskType,
+          period: input.period,
+          isActive: true,
+        });
+      }),
+
+    // チームタスク更新（管理者のみ）
+    update: publicProcedure
+      .input(z.object({
+        token: z.string(),
+        id: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        isActive: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        if (!isValidAdminSession(input.token)) {
+          throw new Error("認証が必要です");
+        }
+        
+        const updateData: Record<string, unknown> = {};
+        if (input.title !== undefined) updateData.title = input.title;
+        if (input.description !== undefined) updateData.description = input.description;
+        if (input.isActive !== undefined) updateData.isActive = input.isActive;
+        
+        await db.updateTeamTask(input.id, updateData);
+        return { success: true };
+      }),
+
+    // チームタスク削除（管理者のみ）
+    delete: publicProcedure
+      .input(z.object({
+        token: z.string(),
+        id: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        if (!isValidAdminSession(input.token)) {
+          throw new Error("認証が必要です");
+        }
+        
+        await db.deleteTeamTask(input.id);
+        return { success: true };
+      }),
+
+    // 全チームタスク取得（管理者用）
+    getAll: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        if (!isValidAdminSession(input.token)) {
+          throw new Error("認証が必要です");
+        }
+        return db.getAllTeamTasks();
+      }),
+
+    // アクティブなチームタスク取得（従業員用 - 認証不要）
+    getActive: publicProcedure.query(async () => {
+      return db.getActiveTeamTasks();
+    }),
+
+    // 期間別チームタスク取得（従業員用 - 認証不要）
+    getByPeriod: publicProcedure
+      .input(z.object({
+        taskType: z.enum(["weekly", "monthly"]),
+        period: z.string(),
+      }))
+      .query(async ({ input }) => {
+        return db.getTeamTasksByPeriod(input.taskType, input.period);
+      }),
+
+    // 現在の週と月のチームタスクを取得（従業員用 - 認証不要）
+    getCurrent: publicProcedure.query(async () => {
+      const now = new Date();
+      
+      // 現在の月を取得 (YYYY-MM)
+      const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      // 現在の週番号を取得 (YYYY-Www)
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
+      const days = Math.floor((now.getTime() - startOfYear.getTime()) / (24 * 60 * 60 * 1000));
+      const weekNumber = Math.ceil((days + startOfYear.getDay() + 1) / 7);
+      const currentWeek = `${now.getFullYear()}-W${String(weekNumber).padStart(2, '0')}`;
+      
+      const weeklyTasks = await db.getTeamTasksByPeriod("weekly", currentWeek);
+      const monthlyTasks = await db.getTeamTasksByPeriod("monthly", currentMonth);
+      
+      return {
+        currentWeek,
+        currentMonth,
+        weeklyTasks,
+        monthlyTasks,
+      };
+    }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;
