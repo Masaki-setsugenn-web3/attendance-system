@@ -16,6 +16,7 @@ vi.mock("./db", () => ({
   createTask: vi.fn(),
   getTasksByAttendanceId: vi.fn(),
   updateTask: vi.fn(),
+  deleteTask: vi.fn(),
   getBreaksByAttendanceId: vi.fn(),
   getActiveBreak: vi.fn(),
   createBreak: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("./db", () => ({
   setAdminSetting: vi.fn(),
   initializeAdminPassword: vi.fn(),
   getAllAttendanceByDate: vi.fn(),
+  getAllAttendanceByDateRange: vi.fn(),
   getAttendanceById: vi.fn(),
 }));
 
@@ -134,10 +136,12 @@ describe("attendance router", () => {
         attendanceId: 1,
         content: "タスク1",
         isCompleted: false,
+        comment: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
     ]);
+    vi.mocked(db.getAllAttendanceByDateRange).mockResolvedValue([]);
 
     const result = await caller.attendance.clockIn({
       employeeId: 1,
