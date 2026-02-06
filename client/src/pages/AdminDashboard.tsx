@@ -11,6 +11,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -24,9 +25,11 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, Link } from "wouter";
 import {
   ArrowLeft, Calendar, MapPin, Settings, LogOut,
-  Loader2, Edit, Users, Clock, ExternalLink, FileSpreadsheet, ListTodo
+  Loader2, Edit, Users, Clock, ExternalLink, FileSpreadsheet, ListTodo, ClipboardList, CheckCircle2, Circle
 } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface AttendanceRecord {
   id: number;
@@ -43,7 +46,7 @@ interface AttendanceRecord {
   reflection: string | null;
   isLate: boolean | null;
   isEarlyLeave: boolean | null;
-  tasks: { id: number; content: string; isCompleted: boolean | null }[];
+  tasks: { id: number; content: string; isCompleted: boolean | null; comment: string | null }[];
   breaks: { id: number; startTime: Date; endTime: Date | null }[];
 }
 
@@ -54,6 +57,7 @@ export default function AdminDashboard() {
     return new Date().toISOString().split("T")[0];
   });
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
+  const [viewingTasksRecord, setViewingTasksRecord] = useState<AttendanceRecord | null>(null);
   const [editForm, setEditForm] = useState({
     clockInTime: "",
     clockOutTime: "",
@@ -341,7 +345,8 @@ export default function AdminDashboard() {
                       <TableHead>退勤</TableHead>
                       <TableHead>状態</TableHead>
                       <TableHead>位置</TableHead>
-                      <TableHead>操作</TableHead>
+                      <TableHead>タスク詳細</TableHead>
+                      <TableHead>編集</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -400,6 +405,19 @@ export default function AdminDashboard() {
                         <TableCell>
                           <Button
                             variant="ghost"
+                            size="sm"
+                            className="flex items-center gap-2"
+                            onClick={() => setViewingTasksRecord(record as AttendanceRecord)}
+                          >
+                            <ClipboardList className="w-4 h-4" />
+                            <span className="hidden md:inline">
+                              {record.tasks.filter(t => t.isCompleted).length}/{record.tasks.length}
+                            </span>
+                          </Button>
+                        </TableCell>
+                        <TableCell>
+                          <Button
+                            variant="ghost"
                             size="icon"
                             onClick={() => openEditDialog(record as AttendanceRecord)}
                           >
@@ -420,6 +438,96 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </main>
+
+      {/* タスク詳細ダイアログ */}
+      <Dialog open={!!viewingTasksRecord} onOpenChange={() => setViewingTasksRecord(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>{viewingTasksRecord?.employeeName}さんの業務報告</DialogTitle>
+            <DialogDescription>
+              {viewingTasksRecord?.date} の業務内容詳細
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="h-[50vh] pr-4">
+            <div className="space-y-6">
+              {/* 今日の目標 */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <div className="w-1 h-6 bg-primary rounded-full"></div>
+                  今日の目標
+                </h3>
+                <Card>
+                  <CardContent className="pt-4 pb-4 bg-muted/30">
+                    <p className="text-base">
+                      {viewingTasksRecord?.todayGoal || "設定なし"}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* タスク一覧 */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
+                  タスク進捗
+                  <Badge variant="outline" className="ml-2">
+                    {viewingTasksRecord?.tasks.filter(t => t.isCompleted).length}/{viewingTasksRecord?.tasks.length} 完了
+                  </Badge>
+                </h3>
+                <div className="space-y-3">
+                  {viewingTasksRecord?.tasks.map((task) => (
+                    <Card key={task.id} className={task.isCompleted ? "border-green-200 bg-green-50/30" : ""}>
+                      <CardContent className="p-4">
+                        <div className="flex items-start gap-3">
+                          {task.isCompleted ? (
+                            <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
+                          ) : (
+                            <Circle className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
+                          )}
+                          <div className="space-y-2 w-full">
+                            <p className={task.isCompleted ? "line-through text-muted-foreground" : ""}>
+                              {task.content}
+                            </p>
+                            {task.comment && (
+                              <div className="bg-muted p-2 rounded text-sm text-muted-foreground mt-2">
+                                <span className="font-semibold text-xs block mb-1">コメント:</span>
+                                {task.comment}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  {viewingTasksRecord?.tasks.length === 0 && (
+                    <p className="text-muted-foreground text-center py-4">タスクはありません</p>
+                  )}
+                </div>
+              </div>
+
+              {/* 振り返り */}
+              <div className="space-y-2">
+                <h3 className="font-semibold text-lg flex items-center gap-2">
+                  <div className="w-1 h-6 bg-orange-500 rounded-full"></div>
+                  一日の振り返り
+                </h3>
+                <Card>
+                  <CardContent className="pt-4 pb-4 bg-muted/30">
+                    <p className="text-base whitespace-pre-wrap">
+                      {viewingTasksRecord?.reflection || "未入力"}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            </div>
+          </ScrollArea>
+
+          <DialogFooter>
+            <Button onClick={() => setViewingTasksRecord(null)}>閉じる</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* 編集ダイアログ */}
       <Dialog open={!!editingRecord} onOpenChange={() => setEditingRecord(null)}>
