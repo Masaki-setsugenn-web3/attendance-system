@@ -1,0 +1,13 @@
+{
+  "query": "SHOW TABLES LIKE 'staff_tasks';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3x1nnYFnhZReQXu.2da6cd28de7a --database XZDX5HCe9qxyY9kRrZQqTM --execute SHOW TABLES LIKE 'staff_tasks';",
+  "rows": [
+    {
+      "Tables_in_XZDX5HCe9qxyY9kRrZQqTM (staff_tasks)": "staff_tasks"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_XZDX5HCe9qxyY9kRrZQqTM (staff_tasks)\nstaff_tasks\n",
+  "stderr": "",
+  "execution_time_ms": 1542
+}

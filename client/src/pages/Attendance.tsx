@@ -9,7 +9,8 @@ import { trpc } from "@/lib/trpc";
 import { useLocation, Link } from "wouter";
 import { 
   Clock, LogIn, LogOut, Coffee, Plus, X, MapPin, 
-  Loader2, History, Settings, CheckCircle2, AlertCircle, Target, Calendar
+  Loader2, History, Settings, CheckCircle2, AlertCircle, Target, Calendar,
+  UserCheck, Flag, MessageSquare, RotateCcw
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -127,6 +128,74 @@ export default function Attendance() {
   // チームタスクを取得
   const { data: teamTasksData } = trpc.teamTask.getCurrent.useQuery();
 
+  // スタッフ個別タスクを取得
+  const { data: staffTasks, refetch: refetchStaffTasks } = trpc.staffTask.getActiveByEmployeeId.useQuery(
+    { employeeId: employeeId! },
+    { enabled: !!employeeId }
+  );
+
+  // 持ち越しタスクを取得（前日の未完了タスク）
+  const { data: yesterdayHistory } = trpc.attendance.getMonthlyHistory.useQuery(
+    { employeeId: employeeId!, yearMonth: new Date().toISOString().slice(0, 7) },
+    { enabled: !!employeeId && todayStatus?.status === "not_clocked_in" }
+  );
+  const carryoverTasks = (() => {
+    if (!yesterdayHistory || yesterdayHistory.length < 2) return [];
+    // 前日の記録を取得（最新から2番目）
+    const sorted = [...yesterdayHistory].sort((a, b) => b.date.localeCompare(a.date));
+    const yesterday = sorted.find(r => r.date !== getTodayLocal());
+    if (!yesterday) return [];
+    return yesterday.tasks.filter((t: { isCompleted: boolean | null }) => !t.isCompleted);
+  })();
+
+  function getTodayLocal() {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+
+  // タスクコメント更新
+  const updateTaskCommentMutation = trpc.task.update.useMutation({
+    onSuccess: () => {
+      toast.success("コメントを保存しました");
+      refetch();
+    },
+    onError: (error: { message: string }) => toast.error(error.message),
+  });
+
+  // タスクコメント用state
+  const [taskComments, setTaskComments] = useState<Record<number, string>>({});
+  const [showCommentFor, setShowCommentFor] = useState<number | null>(null);
+
+  // 持ち越しタスクを出勤タスクに追加
+  const addCarryoverTasks = () => {
+    if (!carryoverTasks || carryoverTasks.length === 0) return;
+    const newTasks = carryoverTasks.map((t: { content: string }) => ({ content: t.content, isCompleted: false }));
+    setTasks(prev => {
+      const filtered = prev.filter(t => t.content.trim() !== "");
+      return [...filtered, ...newTasks, { content: "", isCompleted: false }];
+    });
+    toast.success(`${carryoverTasks.length}件のタスクを引き継ぎました`);
+  };
+
+  // タスクコメントを初期化
+  useEffect(() => {
+    if (todayStatus?.tasks) {
+      const comments: Record<number, string> = {};
+      todayStatus.tasks.forEach((t: { id: number; comment?: string | null }) => {
+        if (t.id && t.comment) comments[t.id] = t.comment;
+      });
+      setTaskComments(comments);
+    }
+  }, [todayStatus?.tasks]);
+
+  const saveTaskComment = (taskId: number) => {
+    updateTaskCommentMutation.mutate({
+      taskId,
+      comment: taskComments[taskId] || "",
+    });
+    setShowCommentFor(null);
+  };
+
   const handleClockIn = () => {
     if (!employeeId) return;
     getLocation();
@@ -232,7 +301,21 @@ export default function Attendance() {
         </div>
 
         <div>
-          <Label>今日のタスク</Label>
+          <div className="flex items-center justify-between">
+            <Label>今日のタスク</Label>
+            {carryoverTasks && carryoverTasks.length > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addCarryoverTasks}
+                className="text-xs h-7 text-amber-600 border-amber-300 hover:bg-amber-50"
+              >
+                <RotateCcw className="w-3 h-3 mr-1" />
+                前日の未完了タスクを引き継ぎ ({carryoverTasks.length}件)
+              </Button>
+            )}
+          </div>
           <div className="space-y-2 mt-1">
             {tasks.map((task, index) => (
               <div key={index} className="flex gap-2">
@@ -315,17 +398,56 @@ export default function Attendance() {
             <div>
               <Label className="text-muted-foreground">タスク</Label>
               <div className="space-y-2 mt-1">
-                {tasks.map((task, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <Checkbox
-                      checked={task.isCompleted}
-                      onCheckedChange={() => toggleTaskCompletion(index)}
-                    />
-                    <span className={task.isCompleted ? "line-through text-muted-foreground" : ""}>
-                      {task.content}
-                    </span>
+                {tasks.map((task, index) => {
+                  const taskId = todayStatus?.tasks?.[index]?.id;
+                  return (
+                  <div key={index} className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={task.isCompleted}
+                        onCheckedChange={() => toggleTaskCompletion(index)}
+                      />
+                      <span className={`flex-1 ${task.isCompleted ? "line-through text-muted-foreground" : ""}`}>
+                        {task.content}
+                      </span>
+                      {taskId && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() => setShowCommentFor(showCommentFor === taskId ? null : taskId)}
+                        >
+                          <MessageSquare className={`h-4 w-4 ${taskComments[taskId] ? 'text-primary' : 'text-muted-foreground'}`} />
+                        </Button>
+                      )}
+                    </div>
+                    {taskId && showCommentFor === taskId && (
+                      <div className="ml-6 flex gap-2">
+                        <Input
+                          placeholder="コメントを入力..."
+                          value={taskComments[taskId] || ""}
+                          onChange={(e) => setTaskComments(prev => ({ ...prev, [taskId]: e.target.value }))}
+                          className="text-sm h-8"
+                        />
+                        <Button
+                          size="sm"
+                          className="h-8"
+                          onClick={() => saveTaskComment(taskId)}
+                          disabled={updateTaskCommentMutation.isPending}
+                        >
+                          保存
+                        </Button>
+                      </div>
+                    )}
+                    {taskId && taskComments[taskId] && showCommentFor !== taskId && (
+                      <p className="ml-6 text-xs text-muted-foreground">
+                        <MessageSquare className="h-3 w-3 inline mr-1" />
+                        {taskComments[taskId]}
+                      </p>
+                    )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -585,6 +707,59 @@ export default function Attendance() {
             </CardContent>
           </Card>
         ) : null}
+
+        {/* スタッフ個別タスク表示 */}
+        {staffTasks && staffTasks.length > 0 && (
+          <Card className="border-amber-500/20 bg-amber-50">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-amber-600" />
+                あなたへのタスク
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {staffTasks.map((task) => (
+                  <div key={task.id} className={`bg-background rounded-lg p-3 border ${task.status === 'completed' ? 'opacity-60' : ''}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                            task.priority === 'high' ? 'bg-red-100 text-red-700' :
+                            task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            <Flag className="h-3 w-3 inline mr-0.5" />
+                            {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
+                          </span>
+                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                            task.status === 'completed' ? 'bg-green-100 text-green-700' :
+                            task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                            {task.status === 'completed' ? '完了' : task.status === 'in_progress' ? '進行中' : '未着手'}
+                          </span>
+                        </div>
+                        <p className={`font-medium ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
+                          {task.title}
+                        </p>
+                        {task.description && (
+                          <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
+                        )}
+                        {task.dueDate && (
+                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            期限: {task.dueDate}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 状態に応じた表示 */}
         {todayStatus?.status === "not_clocked_in" && renderClockInForm()}

@@ -1,0 +1,9 @@
+{
+  "query": "INSERT IGNORE INTO `__drizzle_migrations` (`hash`, `created_at`) VALUES ('0005_zippy_blob', 1771991822128);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway03.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 3x1nnYFnhZReQXu.2da6cd28de7a --database XZDX5HCe9qxyY9kRrZQqTM --execute INSERT IGNORE INTO `__drizzle_migrations` (`hash`, `created_at`) VALUES ('0005_zippy_blob', 1771991822128);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1579
+}

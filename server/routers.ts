@@ -624,6 +624,87 @@ export const appRouter = router({
       return { currentWeek, currentMonth, weeklyTasks, monthlyTasks };
     }),
   }),
+
+  // スタッフ個別タスク関連API
+  staffTask: router({
+    create: publicProcedure
+      .input(z.object({
+        token: z.string(),
+        employeeId: z.number(),
+        title: z.string().min(1),
+        description: z.string().optional(),
+        dueDate: z.string().optional(),
+        priority: z.enum(["low", "medium", "high"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        if (!isValidAdminSession(input.token)) {
+          throw new Error("認証が必要です");
+        }
+        return db.createStaffTask({
+          employeeId: input.employeeId,
+          title: input.title,
+          description: input.description,
+          dueDate: input.dueDate,
+          priority: input.priority || "medium",
+          status: "pending",
+        });
+      }),
+
+    update: publicProcedure
+      .input(z.object({
+        token: z.string().optional(),
+        id: z.number(),
+        title: z.string().optional(),
+        description: z.string().optional(),
+        dueDate: z.string().optional(),
+        priority: z.enum(["low", "medium", "high"]).optional(),
+        status: z.enum(["pending", "in_progress", "completed"]).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const updateData: Record<string, unknown> = {};
+        if (input.title !== undefined) updateData.title = input.title;
+        if (input.description !== undefined) updateData.description = input.description;
+        if (input.dueDate !== undefined) updateData.dueDate = input.dueDate;
+        if (input.priority !== undefined) updateData.priority = input.priority;
+        if (input.status !== undefined) updateData.status = input.status;
+        await db.updateStaffTask(input.id, updateData);
+        return { success: true };
+      }),
+
+    delete: publicProcedure
+      .input(z.object({
+        token: z.string(),
+        id: z.number(),
+      }))
+      .mutation(async ({ input }) => {
+        if (!isValidAdminSession(input.token)) {
+          throw new Error("認証が必要です");
+        }
+        await db.deleteStaffTask(input.id);
+        return { success: true };
+      }),
+
+    getAll: publicProcedure
+      .input(z.object({ token: z.string() }))
+      .query(async ({ input }) => {
+        if (!isValidAdminSession(input.token)) {
+          throw new Error("認証が必要です");
+        }
+        return db.getAllStaffTasks();
+      }),
+
+    getByEmployeeId: publicProcedure
+      .input(z.object({ employeeId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getStaffTasksByEmployeeId(input.employeeId);
+      }),
+
+    getActiveByEmployeeId: publicProcedure
+      .input(z.object({ employeeId: z.number() }))
+      .query(async ({ input }) => {
+        return db.getActiveStaffTasksByEmployeeId(input.employeeId);
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

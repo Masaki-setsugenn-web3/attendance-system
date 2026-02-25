@@ -36,6 +36,13 @@
       "when": 1770345106524,
       "tag": "0004_funny_toad",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1771991822128,
+      "tag": "0005_zippy_blob",
+      "breakpoints": true
     }
   ]
 }

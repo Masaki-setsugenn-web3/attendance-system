@@ -7,7 +7,8 @@ import {
   tasks, InsertTask, Task,
   breaks, InsertBreak, Break,
   adminSettings, InsertAdminSetting,
-  teamTasks, InsertTeamTask, TeamTask
+  teamTasks, InsertTeamTask, TeamTask,
+  staffTasks, InsertStaffTask, StaffTask
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -427,4 +428,97 @@ export async function getTeamTaskById(id: number): Promise<TeamTask | undefined>
   
   const result = await db.select().from(teamTasks).where(eq(teamTasks.id, id)).limit(1);
   return result[0];
+}
+
+// ========== Staff Task Functions ==========
+export async function createStaffTask(data: InsertStaffTask): Promise<StaffTask> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.insert(staffTasks).values(data);
+  const insertId = result[0].insertId;
+  const [task] = await db.select().from(staffTasks).where(eq(staffTasks.id, insertId));
+  return task;
+}
+
+export async function updateStaffTask(id: number, data: Partial<InsertStaffTask>): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.update(staffTasks).set(data).where(eq(staffTasks.id, id));
+}
+
+export async function deleteStaffTask(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  await db.delete(staffTasks).where(eq(staffTasks.id, id));
+}
+
+export async function getStaffTasksByEmployeeId(employeeId: number): Promise<StaffTask[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return db.select()
+    .from(staffTasks)
+    .where(eq(staffTasks.employeeId, employeeId))
+    .orderBy(desc(staffTasks.createdAt));
+}
+
+export async function getActiveStaffTasksByEmployeeId(employeeId: number): Promise<StaffTask[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  return db.select()
+    .from(staffTasks)
+    .where(and(
+      eq(staffTasks.employeeId, employeeId),
+      eq(staffTasks.status, "pending")
+    ))
+    .orderBy(staffTasks.dueDate);
+}
+
+export async function getAllStaffTasks(): Promise<(StaffTask & { employeeName: string })[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const allTasks = await db.select()
+    .from(staffTasks)
+    .orderBy(desc(staffTasks.createdAt));
+  
+  const result: (StaffTask & { employeeName: string })[] = [];
+  for (const task of allTasks) {
+    const employee = await getEmployeeById(task.employeeId);
+    result.push({
+      ...task,
+      employeeName: employee?.name || "Unknown"
+    });
+  }
+  return result;
+}
+
+export async function getStaffTaskById(id: number): Promise<StaffTask | undefined> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  const result = await db.select().from(staffTasks).where(eq(staffTasks.id, id)).limit(1);
+  return result[0];
+}
+
+export async function getUncompletedTasksFromPreviousDay(employeeId: number, currentDate: string): Promise<Task[]> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  
+  // 前日の日付を計算
+  const date = new Date(currentDate);
+  date.setDate(date.getDate() - 1);
+  const previousDate = date.toISOString().split('T')[0];
+  
+  // 前日の勤怠記録を取得
+  const prevRecord = await getAttendanceByEmployeeAndDate(employeeId, previousDate);
+  if (!prevRecord) return [];
+  
+  // 未完了タスクを取得
+  const prevTasks = await getTasksByAttendanceId(prevRecord.id);
+  return prevTasks.filter(t => !t.isCompleted);
 }

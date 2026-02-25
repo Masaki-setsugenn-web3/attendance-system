@@ -123,3 +123,21 @@ export const teamTasks = mysqlTable("team_tasks", {
 
 export type TeamTask = typeof teamTasks.$inferSelect;
 export type InsertTeamTask = typeof teamTasks.$inferInsert;
+
+/**
+ * スタッフ個別タスクテーブル - 管理者が従業員ごとに割り当てるタスク
+ */
+export const staffTasks = mysqlTable("staff_tasks", {
+  id: int("id").autoincrement().primaryKey(),
+  employeeId: int("employeeId").notNull(),
+  title: varchar("title", { length: 200 }).notNull(),
+  description: text("description"),
+  dueDate: varchar("dueDate", { length: 10 }), // YYYY-MM-DD形式
+  priority: mysqlEnum("priority", ["low", "medium", "high"]).default("medium"),
+  status: mysqlEnum("status", ["pending", "in_progress", "completed"]).default("pending"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type StaffTask = typeof staffTasks.$inferSelect;
+export type InsertStaffTask = typeof staffTasks.$inferInsert;
