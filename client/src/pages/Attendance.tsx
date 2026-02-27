@@ -13,6 +13,7 @@ import {
   UserCheck, Flag, MessageSquare, RotateCcw
 } from "lucide-react";
 import { toast } from "sonner";
+import { requestNotificationPermission, notifyTaskStatusUpdated, notifyTaskAdded } from "@/lib/notifications";
 
 interface Task {
   id?: number;
@@ -47,6 +48,9 @@ export default function Attendance() {
     }
     setEmployeeId(parseInt(storedId));
     setEmployeeName(storedName);
+    
+    // 通知権限をリクエスト
+    requestNotificationPermission();
   }, [setLocation]);
 
   // 位置情報を取得
@@ -129,10 +133,55 @@ export default function Attendance() {
   const { data: teamTasksData } = trpc.teamTask.getCurrent.useQuery();
 
   // スタッフ個別タスクを取得
+  const [previousStaffTaskIds, setPreviousStaffTaskIds] = useState<Set<number>>(new Set());
   const { data: staffTasks, refetch: refetchStaffTasks } = trpc.staffTask.getActiveByEmployeeId.useQuery(
     { employeeId: employeeId! },
     { enabled: !!employeeId }
   );
+
+  // 新しいタスクが追加されたら通知
+  useEffect(() => {
+    if (!staffTasks || staffTasks.length === 0) return;
+    
+    const currentTaskIds = new Set(staffTasks.map(t => t.id));
+    
+    // 初回ロード時は通知しない
+    if (previousStaffTaskIds.size === 0) {
+      setPreviousStaffTaskIds(currentTaskIds);
+      return;
+    }
+    
+    // 新しいタスクを検出
+    staffTasks.forEach(task => {
+      if (!previousStaffTaskIds.has(task.id)) {
+        notifyTaskAdded(task.title);
+      }
+    });
+    
+    setPreviousStaffTaskIds(currentTaskIds);
+  }, [staffTasks, previousStaffTaskIds]);
+
+  // スタッフタスクのステータス更新
+  const updateStaffTaskStatusMutation = trpc.staffTask.updateStatus.useMutation({
+    onSuccess: (_, variables) => {
+      toast.success("タスクステータスを更新しました");
+      
+      // 通知を表示
+      const task = staffTasks?.find(t => t.id === variables.taskId);
+      if (task) {
+        notifyTaskStatusUpdated(task.title, variables.status);
+      }
+      
+      refetchStaffTasks();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
+
+  const handleStaffTaskStatusUpdate = (taskId: number, newStatus: 'pending' | 'in_progress' | 'completed') => {
+    updateStaffTaskStatusMutation.mutate({ taskId, status: newStatus });
+  };
 
   // 持ち越しタスクを取得（前日の未完了タスク）
   const { data: yesterdayHistory } = trpc.attendance.getMonthlyHistory.useQuery(
@@ -753,6 +802,43 @@ export default function Attendance() {
                           </p>
                         )}
                       </div>
+                      {todayStatus?.status === "working" && (
+                        <div className="flex gap-1">
+                          {task.status !== 'pending' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => handleStaffTaskStatusUpdate(task.id, 'pending')}
+                              disabled={updateStaffTaskStatusMutation.isPending}
+                            >
+                              未着手
+                            </Button>
+                          )}
+                          {task.status !== 'in_progress' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => handleStaffTaskStatusUpdate(task.id, 'in_progress')}
+                              disabled={updateStaffTaskStatusMutation.isPending}
+                            >
+                              進行中
+                            </Button>
+                          )}
+                          {task.status !== 'completed' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-xs"
+                              onClick={() => handleStaffTaskStatusUpdate(task.id, 'completed')}
+                              disabled={updateStaffTaskStatusMutation.isPending}
+                            >
+                              完了
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}

@@ -704,6 +704,16 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return db.getActiveStaffTasksByEmployeeId(input.employeeId);
       }),
+
+    updateStatus: publicProcedure
+      .input(z.object({
+        taskId: z.number(),
+        status: z.enum(["pending", "in_progress", "completed"]),
+      }))
+      .mutation(async ({ input }) => {
+        await db.updateStaffTask(input.taskId, { status: input.status });
+        return { success: true };
+      }),
   }),
 });
 
