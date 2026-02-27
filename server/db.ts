@@ -471,10 +471,7 @@ export async function getActiveStaffTasksByEmployeeId(employeeId: number): Promi
   
   return db.select()
     .from(staffTasks)
-    .where(and(
-      eq(staffTasks.employeeId, employeeId),
-      eq(staffTasks.status, "pending")
-    ))
+    .where(eq(staffTasks.employeeId, employeeId))
     .orderBy(staffTasks.dueDate);
 }
 
