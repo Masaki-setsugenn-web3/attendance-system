@@ -1,25 +1,16 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { trpc } from "@/lib/trpc";
 import { useLocation, Link } from "wouter";
 import { 
-  Clock, LogIn, LogOut, Coffee, Plus, X, MapPin, 
-  Loader2, History, Settings, CheckCircle2, AlertCircle, Target, Calendar,
-  UserCheck, Flag, MessageSquare, RotateCcw
+  Clock, LogIn, LogOut, Coffee, 
+  Loader2, History, CheckCircle2, AlertCircle, Flag
 } from "lucide-react";
 import { toast } from "sonner";
-import { requestNotificationPermission, notifyTaskStatusUpdated, notifyTaskAdded } from "@/lib/notifications";
-
-interface Task {
-  id?: number;
-  content: string;
-  isCompleted: boolean;
-}
 
 export default function Attendance() {
   const [, setLocation] = useLocation();
@@ -27,8 +18,6 @@ export default function Attendance() {
   const [employeeName, setEmployeeName] = useState<string>("");
   
   // 出勤フォーム
-  const [todayGoal, setTodayGoal] = useState("");
-  const [tasks, setTasks] = useState<Task[]>([{ content: "", isCompleted: false }]);
   const [isLate, setIsLate] = useState(false);
   
   // 退勤フォーム
@@ -36,8 +25,7 @@ export default function Attendance() {
   const [isEarlyLeave, setIsEarlyLeave] = useState(false);
   
   // GPS
-  const [location, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
+  const [gpsLocation, setGpsLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     const storedId = localStorage.getItem("employeeId");
@@ -48,28 +36,19 @@ export default function Attendance() {
     }
     setEmployeeId(parseInt(storedId));
     setEmployeeName(storedName);
-    
-    // 通知権限をリクエスト
-    requestNotificationPermission();
   }, [setLocation]);
 
   // 位置情報を取得
   const getLocation = () => {
-    if (!navigator.geolocation) {
-      setLocationError("位置情報がサポートされていません");
-      return;
-    }
-
+    if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (position) => {
         setGpsLocation({
           lat: position.coords.latitude,
           lng: position.coords.longitude,
         });
-        setLocationError(null);
       },
       (error) => {
-        setLocationError("位置情報を取得できませんでした");
         console.error("Geolocation error:", error);
       }
     );
@@ -129,184 +108,28 @@ export default function Attendance() {
     },
   });
 
-  // チームタスクを取得
-  const { data: teamTasksData } = trpc.teamTask.getCurrent.useQuery();
-
-  // スタッフ個別タスクを取得
-  const [previousStaffTaskIds, setPreviousStaffTaskIds] = useState<Set<number>>(new Set());
-  const { data: staffTasks, refetch: refetchStaffTasks } = trpc.staffTask.getActiveByEmployeeId.useQuery(
-    { employeeId: employeeId! },
-    { enabled: !!employeeId }
-  );
-
-  // 新しいタスクが追加されたら通知
-  useEffect(() => {
-    if (!staffTasks || staffTasks.length === 0) return;
-    
-    const currentTaskIds = new Set(staffTasks.map(t => t.id));
-    
-    // 初回ロード時は通知しない
-    if (previousStaffTaskIds.size === 0) {
-      setPreviousStaffTaskIds(currentTaskIds);
-      return;
-    }
-    
-    // 新しいタスクを検出
-    staffTasks.forEach(task => {
-      if (!previousStaffTaskIds.has(task.id)) {
-        notifyTaskAdded(task.title);
-      }
-    });
-    
-    setPreviousStaffTaskIds(currentTaskIds);
-  }, [staffTasks, previousStaffTaskIds]);
-
-  // スタッフタスクのステータス更新
-  const updateStaffTaskStatusMutation = trpc.staffTask.updateStatus.useMutation({
-    onSuccess: (_, variables) => {
-      toast.success("タスクステータスを更新しました");
-      
-      // 通知を表示
-      const task = staffTasks?.find(t => t.id === variables.taskId);
-      if (task) {
-        notifyTaskStatusUpdated(task.title, variables.status);
-      }
-      
-      refetchStaffTasks();
-    },
-    onError: (error) => {
-      toast.error(error.message);
-    },
-  });
-
-  const handleStaffTaskStatusUpdate = (taskId: number, newStatus: 'pending' | 'in_progress' | 'completed') => {
-    updateStaffTaskStatusMutation.mutate({ taskId, status: newStatus });
-  };
-
-  // 持ち越しタスクを取得（前日の未完了タスク）
-  const { data: yesterdayHistory } = trpc.attendance.getMonthlyHistory.useQuery(
-    { employeeId: employeeId!, yearMonth: new Date().toISOString().slice(0, 7) },
-    { enabled: !!employeeId && todayStatus?.status === "not_clocked_in" }
-  );
-  const carryoverTasks = (() => {
-    if (!yesterdayHistory || yesterdayHistory.length < 2) return [];
-    // 前日の記録を取得（最新から2番目）
-    const sorted = [...yesterdayHistory].sort((a, b) => b.date.localeCompare(a.date));
-    const yesterday = sorted.find(r => r.date !== getTodayLocal());
-    if (!yesterday) return [];
-    return yesterday.tasks.filter((t: { isCompleted: boolean | null }) => !t.isCompleted);
-  })();
-
-  function getTodayLocal() {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  }
-
-  // タスクコメント更新
-  const updateTaskCommentMutation = trpc.task.update.useMutation({
-    onSuccess: () => {
-      toast.success("コメントを保存しました");
-      refetch();
-    },
-    onError: (error: { message: string }) => toast.error(error.message),
-  });
-
-  // タスクコメント用state
-  const [taskComments, setTaskComments] = useState<Record<number, string>>({});
-  const [showCommentFor, setShowCommentFor] = useState<number | null>(null);
-
-  // 持ち越しタスクを出勤タスクに追加
-  const addCarryoverTasks = () => {
-    if (!carryoverTasks || carryoverTasks.length === 0) return;
-    const newTasks = carryoverTasks.map((t: { content: string }) => ({ content: t.content, isCompleted: false }));
-    setTasks(prev => {
-      const filtered = prev.filter(t => t.content.trim() !== "");
-      return [...filtered, ...newTasks, { content: "", isCompleted: false }];
-    });
-    toast.success(`${carryoverTasks.length}件のタスクを引き継ぎました`);
-  };
-
-  // タスクコメントを初期化
-  useEffect(() => {
-    if (todayStatus?.tasks) {
-      const comments: Record<number, string> = {};
-      todayStatus.tasks.forEach((t: { id: number; comment?: string | null }) => {
-        if (t.id && t.comment) comments[t.id] = t.comment;
-      });
-      setTaskComments(comments);
-    }
-  }, [todayStatus?.tasks]);
-
-  const saveTaskComment = (taskId: number) => {
-    updateTaskCommentMutation.mutate({
-      taskId,
-      comment: taskComments[taskId] || "",
-    });
-    setShowCommentFor(null);
-  };
-
   const handleClockIn = () => {
     if (!employeeId) return;
     getLocation();
     clockInMutation.mutate({
       employeeId,
-      todayGoal,
-      tasks: tasks.map(t => t.content).filter(c => c.trim()),
       isLate,
-      latitude: location?.lat,
-      longitude: location?.lng,
+      latitude: gpsLocation?.lat,
+      longitude: gpsLocation?.lng,
     });
   };
 
   const handleClockOut = () => {
-    if (!employeeId || !todayStatus?.tasks) return;
+    if (!employeeId) return;
     getLocation();
-    const completedTaskIds = todayStatus.tasks
-      .filter((_, i) => tasks[i]?.isCompleted)
-      .map(t => t.id);
-    
     clockOutMutation.mutate({
       employeeId,
       reflection,
       isEarlyLeave,
-      latitude: location?.lat,
-      longitude: location?.lng,
-      completedTaskIds,
+      latitude: gpsLocation?.lat,
+      longitude: gpsLocation?.lng,
     });
   };
-
-  const addTask = () => {
-    setTasks([...tasks, { content: "", isCompleted: false }]);
-  };
-
-  const removeTask = (index: number) => {
-    if (tasks.length > 1) {
-      setTasks(tasks.filter((_, i) => i !== index));
-    }
-  };
-
-  const updateTask = (index: number, content: string) => {
-    const newTasks = [...tasks];
-    newTasks[index] = { ...newTasks[index], content };
-    setTasks(newTasks);
-  };
-
-  const toggleTaskCompletion = (index: number) => {
-    const newTasks = [...tasks];
-    newTasks[index] = { ...newTasks[index], isCompleted: !newTasks[index].isCompleted };
-    setTasks(newTasks);
-  };
-
-  // 既存タスクをセット
-  useEffect(() => {
-    if (todayStatus?.tasks && todayStatus.tasks.length > 0) {
-      setTasks(todayStatus.tasks.map(t => ({
-        id: t.id,
-        content: t.content,
-        isCompleted: t.isCompleted ?? false,
-      })));
-    }
-  }, [todayStatus?.tasks]);
 
   const handleLogout = () => {
     localStorage.removeItem("employeeId");
@@ -328,6 +151,16 @@ export default function Attendance() {
     return d.toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" });
   };
 
+  const calculateBreakMinutes = () => {
+    if (!todayStatus?.breaks) return 0;
+    return todayStatus.breaks.reduce((total, b) => {
+      if (b.startTime && b.endTime) {
+        return total + Math.round((new Date(b.endTime).getTime() - new Date(b.startTime).getTime()) / 60000);
+      }
+      return total;
+    }, 0);
+  };
+
   const renderClockInForm = () => (
     <Card>
       <CardHeader>
@@ -335,82 +168,24 @@ export default function Attendance() {
           <LogIn className="w-5 h-5" />
           出勤打刻
         </CardTitle>
-        <CardDescription>今日の目標とタスクを入力してください</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div>
-          <Label htmlFor="goal">今日の目標</Label>
-          <Textarea
-            id="goal"
-            placeholder="今日達成したいことを入力"
-            value={todayGoal}
-            onChange={(e) => setTodayGoal(e.target.value)}
-            className="mt-1"
-          />
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between">
-            <Label>今日のタスク</Label>
-            {carryoverTasks && carryoverTasks.length > 0 && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addCarryoverTasks}
-                className="text-xs h-7 text-amber-600 border-amber-300 hover:bg-amber-50"
-              >
-                <RotateCcw className="w-3 h-3 mr-1" />
-                前日の未完了タスクを引き継ぎ ({carryoverTasks.length}件)
-              </Button>
-            )}
-          </div>
-          <div className="space-y-2 mt-1">
-            {tasks.map((task, index) => (
-              <div key={index} className="flex gap-2">
-                <Input
-                  placeholder={`タスク ${index + 1}`}
-                  value={task.content}
-                  onChange={(e) => updateTask(index, e.target.value)}
-                />
-                {tasks.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    onClick={() => removeTask(index)}
-                  >
-                    <X className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-            ))}
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addTask}
-              className="w-full"
-            >
-              <Plus className="w-4 h-4 mr-2" />
-              タスクを追加
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center gap-2">
           <Checkbox
-            id="late"
+            id="isLate"
             checked={isLate}
             onCheckedChange={(checked) => setIsLate(checked === true)}
           />
-          <Label htmlFor="late" className="text-sm">遅刻</Label>
+          <Label htmlFor="isLate" className="flex items-center gap-1 text-amber-600">
+            <Flag className="w-4 h-4" />
+            遅刻
+          </Label>
         </div>
 
         <Button
           onClick={handleClockIn}
-          className="w-full h-12 text-lg"
           disabled={clockInMutation.isPending}
+          className="w-full bg-primary hover:bg-primary/90 text-white py-6 text-lg font-bold"
         >
           {clockInMutation.isPending ? (
             <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -425,244 +200,139 @@ export default function Attendance() {
 
   const renderWorkingStatus = () => (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            勤務中
-          </CardTitle>
-          <CardDescription>
-            出勤時刻: {formatTime(todayStatus?.record?.clockInTime)}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {todayStatus?.record?.todayGoal && (
-            <div>
-              <Label className="text-muted-foreground">今日の目標</Label>
-              <p className="mt-1">{todayStatus.record.todayGoal}</p>
+      {/* 勤務状況カード */}
+      <Card className="border-primary/30 bg-primary/5">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+              <span className="font-semibold text-primary">
+                {todayStatus?.status === 'on_break' ? '中抜け中' : '勤務中'}
+              </span>
             </div>
-          )}
-
-          {todayStatus?.tasks && todayStatus.tasks.length > 0 && (
-            <div>
-              <Label className="text-muted-foreground">タスク</Label>
-              <div className="space-y-2 mt-1">
-                {tasks.map((task, index) => {
-                  const taskId = todayStatus?.tasks?.[index]?.id;
-                  return (
-                  <div key={index} className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        checked={task.isCompleted}
-                        onCheckedChange={() => toggleTaskCompletion(index)}
-                      />
-                      <span className={`flex-1 ${task.isCompleted ? "line-through text-muted-foreground" : ""}`}>
-                        {task.content}
-                      </span>
-                      {taskId && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          onClick={() => setShowCommentFor(showCommentFor === taskId ? null : taskId)}
-                        >
-                          <MessageSquare className={`h-4 w-4 ${taskComments[taskId] ? 'text-primary' : 'text-muted-foreground'}`} />
-                        </Button>
-                      )}
-                    </div>
-                    {taskId && showCommentFor === taskId && (
-                      <div className="ml-6 flex gap-2">
-                        <Input
-                          placeholder="コメントを入力..."
-                          value={taskComments[taskId] || ""}
-                          onChange={(e) => setTaskComments(prev => ({ ...prev, [taskId]: e.target.value }))}
-                          className="text-sm h-8"
-                        />
-                        <Button
-                          size="sm"
-                          className="h-8"
-                          onClick={() => saveTaskComment(taskId)}
-                          disabled={updateTaskCommentMutation.isPending}
-                        >
-                          保存
-                        </Button>
-                      </div>
-                    )}
-                    {taskId && taskComments[taskId] && showCommentFor !== taskId && (
-                      <p className="ml-6 text-xs text-muted-foreground">
-                        <MessageSquare className="h-3 w-3 inline mr-1" />
-                        {taskComments[taskId]}
-                      </p>
-                    )}
-                  </div>
-                  );
-                })}
-              </div>
+            <div className="text-right">
+              <div className="text-sm text-muted-foreground">出勤時刻</div>
+              <div className="font-bold text-lg">{formatTime(todayStatus?.record?.clockInTime)}</div>
             </div>
-          )}
-
-          {todayStatus?.breaks && todayStatus.breaks.length > 0 && (
-            <div>
-              <Label className="text-muted-foreground">中抜け履歴</Label>
-              <div className="space-y-1 mt-1 text-sm">
-                {todayStatus.breaks.map((b, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <Coffee className="w-4 h-4" />
-                    <span>
-                      {formatTime(b.startTime)} - {b.endTime ? formatTime(b.endTime) : "継続中"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-2">
-            {todayStatus?.status === "on_break" ? (
-              <Button
-                onClick={() => endBreakMutation.mutate({ employeeId: employeeId! })}
-                variant="outline"
-                className="flex-1"
-                disabled={endBreakMutation.isPending}
-              >
-                {endBreakMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <Coffee className="w-4 h-4 mr-2" />
-                )}
-                中抜け終了
-              </Button>
-            ) : (
-              <Button
-                onClick={() => startBreakMutation.mutate({ employeeId: employeeId! })}
-                variant="outline"
-                className="flex-1"
-                disabled={startBreakMutation.isPending}
-              >
-                {startBreakMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <Coffee className="w-4 h-4 mr-2" />
-                )}
-                中抜け開始
-              </Button>
-            )}
           </div>
+
+          {todayStatus?.record?.isLate && (
+            <div className="flex items-center gap-1 text-amber-600 text-sm mb-3">
+              <Flag className="w-4 h-4" />
+              <span>遅刻</span>
+            </div>
+          )}
+
+          {calculateBreakMinutes() > 0 && (
+            <div className="text-sm text-muted-foreground">
+              中抜け合計: {calculateBreakMinutes()}分
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <LogOut className="w-5 h-5" />
-            退勤打刻
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="reflection">振り返りメモ</Label>
-            <Textarea
-              id="reflection"
-              placeholder="今日の振り返りを入力"
-              value={reflection}
-              onChange={(e) => setReflection(e.target.value)}
-              className="mt-1"
-            />
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Checkbox
-              id="earlyLeave"
-              checked={isEarlyLeave}
-              onCheckedChange={(checked) => setIsEarlyLeave(checked === true)}
-            />
-            <Label htmlFor="earlyLeave" className="text-sm">早退</Label>
-          </div>
-
-          <Button
-            onClick={handleClockOut}
-            className="w-full h-12 text-lg"
-            disabled={clockOutMutation.isPending || todayStatus?.status === "on_break"}
-          >
-            {clockOutMutation.isPending ? (
-              <Loader2 className="w-5 h-5 animate-spin mr-2" />
-            ) : (
-              <LogOut className="w-5 h-5 mr-2" />
-            )}
-            退勤する
-          </Button>
-          {todayStatus?.status === "on_break" && (
-            <p className="text-sm text-destructive text-center">
-              中抜け中は退勤できません
-            </p>
+      {/* 中抜けボタン */}
+      {todayStatus?.status === 'working' && (
+        <Button
+          variant="outline"
+          onClick={() => startBreakMutation.mutate({ employeeId: employeeId! })}
+          disabled={startBreakMutation.isPending}
+          className="w-full border-amber-400 text-amber-600 hover:bg-amber-50 py-5"
+        >
+          {startBreakMutation.isPending ? (
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+          ) : (
+            <Coffee className="w-5 h-5 mr-2" />
           )}
-        </CardContent>
-      </Card>
+          中抜け開始
+        </Button>
+      )}
+
+      {todayStatus?.status === 'on_break' && (
+        <Button
+          onClick={() => endBreakMutation.mutate({ employeeId: employeeId! })}
+          disabled={endBreakMutation.isPending}
+          className="w-full bg-amber-500 hover:bg-amber-600 text-white py-5"
+        >
+          {endBreakMutation.isPending ? (
+            <Loader2 className="w-5 h-5 animate-spin mr-2" />
+          ) : (
+            <Coffee className="w-5 h-5 mr-2" />
+          )}
+          中抜け終了
+        </Button>
+      )}
+
+      {/* 退勤フォーム */}
+      {todayStatus?.status !== 'on_break' && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <LogOut className="w-5 h-5" />
+              退勤打刻
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <Label htmlFor="reflection">振り返りメモ</Label>
+              <Textarea
+                id="reflection"
+                value={reflection}
+                onChange={(e) => setReflection(e.target.value)}
+                placeholder="今日の振り返りを入力..."
+                className="mt-1"
+                rows={3}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="isEarlyLeave"
+                checked={isEarlyLeave}
+                onCheckedChange={(checked) => setIsEarlyLeave(checked === true)}
+              />
+              <Label htmlFor="isEarlyLeave" className="flex items-center gap-1 text-amber-600">
+                <Flag className="w-4 h-4" />
+                早退
+              </Label>
+            </div>
+
+            <Button
+              onClick={handleClockOut}
+              disabled={clockOutMutation.isPending}
+              className="w-full bg-red-600 hover:bg-red-700 text-white py-6 text-lg font-bold"
+            >
+              {clockOutMutation.isPending ? (
+                <Loader2 className="w-5 h-5 animate-spin mr-2" />
+              ) : (
+                <LogOut className="w-5 h-5 mr-2" />
+              )}
+              退勤する
+            </Button>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 
   const renderClockedOut = () => (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CheckCircle2 className="w-5 h-5 text-primary" />
-          本日の勤務完了
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label className="text-muted-foreground">出勤</Label>
-            <p className="text-lg font-medium">{formatTime(todayStatus?.record?.clockInTime)}</p>
-          </div>
-          <div>
-            <Label className="text-muted-foreground">退勤</Label>
-            <p className="text-lg font-medium">{formatTime(todayStatus?.record?.clockOutTime)}</p>
-          </div>
+    <Card className="border-green-200 bg-green-50">
+      <CardContent className="pt-6 text-center">
+        <CheckCircle2 className="w-12 h-12 text-green-500 mx-auto mb-3" />
+        <h3 className="text-lg font-bold text-green-700 mb-2">お疲れさまでした！</h3>
+        <div className="text-sm text-muted-foreground space-y-1">
+          <div>出勤: {formatTime(todayStatus?.record?.clockInTime)}</div>
+          <div>退勤: {formatTime(todayStatus?.record?.clockOutTime)}</div>
+          {calculateBreakMinutes() > 0 && (
+            <div>中抜け: {calculateBreakMinutes()}分</div>
+          )}
         </div>
-
-        {todayStatus?.record?.todayGoal && (
-          <div>
-            <Label className="text-muted-foreground">今日の目標</Label>
-            <p className="mt-1">{todayStatus.record.todayGoal}</p>
-          </div>
-        )}
-
-        {todayStatus?.tasks && todayStatus.tasks.length > 0 && (
-          <div>
-            <Label className="text-muted-foreground">タスク</Label>
-            <div className="space-y-1 mt-1">
-              {todayStatus.tasks.map((task, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  {task.isCompleted ? (
-                    <CheckCircle2 className="w-4 h-4 text-primary" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-muted-foreground" />
-                  )}
-                  <span className={task.isCompleted ? "text-muted-foreground" : ""}>
-                    {task.content}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {todayStatus?.record?.reflection && (
-          <div>
-            <Label className="text-muted-foreground">振り返り</Label>
-            <p className="mt-1">{todayStatus.record.reflection}</p>
+          <div className="mt-3 p-3 bg-white rounded-lg text-left text-sm">
+            <div className="font-medium text-muted-foreground mb-1">振り返り</div>
+            <div>{todayStatus.record.reflection}</div>
           </div>
         )}
-
-        <div className="flex items-center gap-2 text-sm">
-          {todayStatus?.record?.isLate && (
-            <span className="px-2 py-1 bg-destructive/10 text-destructive rounded">遅刻</span>
-          )}
-          {todayStatus?.record?.isEarlyLeave && (
-            <span className="px-2 py-1 bg-destructive/10 text-destructive rounded">早退</span>
-          )}
-        </div>
       </CardContent>
     </Card>
   );
@@ -670,195 +340,69 @@ export default function Attendance() {
   return (
     <div className="min-h-screen bg-background">
       {/* ヘッダー */}
-      <header className="sticky top-0 z-10 bg-primary text-primary-foreground shadow-md">
-        <div className="container py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-lg font-semibold">勤怠管理</h1>
-              <p className="text-sm opacity-90">ようこそ {employeeName} さん！</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Link href="/history">
-                <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
-                  <History className="w-5 h-5" />
-                </Button>
-              </Link>
-              <Link href="/admin">
-                <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
-                  <Settings className="w-5 h-5" />
-                </Button>
-              </Link>
+      <header className="bg-primary text-white px-4 py-4 sticky top-0 z-10 shadow-md">
+        <div className="max-w-md mx-auto flex items-center justify-between">
+          <div>
+            <div className="text-xs opacity-75">ようこそ</div>
+            <div className="font-bold text-lg">{employeeName}さん！</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-xs opacity-75">
+                {new Date().toLocaleDateString("ja-JP", { month: "long", day: "numeric", weekday: "short" })}
+              </div>
+              <div className="font-bold flex items-center gap-1">
+                <Clock className="w-4 h-4" />
+                {new Date().toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* メインコンテンツ */}
-      <main className="container py-6 space-y-6">
-        {/* 日付表示 */}
-        <div className="text-center">
-          <p className="text-2xl font-bold">
-            {new Date().toLocaleDateString("ja-JP", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-              weekday: "long",
-            })}
-          </p>
-        </div>
+      <main className="max-w-md mx-auto p-4 space-y-4 pb-24">
+        {/* ステータス表示 */}
+        {!todayStatus || todayStatus.status === 'not_clocked_in' ? (
+          renderClockInForm()
+        ) : todayStatus.status === 'clocked_out' ? (
+          renderClockedOut()
+        ) : (
+          renderWorkingStatus()
+        )}
 
-        {/* チームタスク表示 */}
-        {(teamTasksData?.weeklyTasks?.length || teamTasksData?.monthlyTasks?.length) ? (
-          <Card className="border-primary/20 bg-primary/5">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <Target className="w-5 h-5 text-primary" />
-                チームタスク
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {teamTasksData?.weeklyTasks && teamTasksData.weeklyTasks.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Calendar className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-muted-foreground">今週のタスク</span>
-                  </div>
-                  <div className="space-y-2">
-                    {teamTasksData.weeklyTasks.map((task) => (
-                      <div key={task.id} className="bg-background rounded-lg p-3 border">
-                        <p className="font-medium">{task.title}</p>
-                        {task.description && (
-                          <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {teamTasksData?.monthlyTasks && teamTasksData.monthlyTasks.length > 0 && (
-                <div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Target className="w-4 h-4 text-muted-foreground" />
-                    <span className="text-sm font-medium text-muted-foreground">今月のタスク</span>
-                  </div>
-                  <div className="space-y-2">
-                    {teamTasksData.monthlyTasks.map((task) => (
-                      <div key={task.id} className="bg-background rounded-lg p-3 border">
-                        <p className="font-medium">{task.title}</p>
-                        {task.description && (
-                          <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ) : null}
-
-        {/* スタッフ個別タスク表示 */}
-        {staffTasks && staffTasks.length > 0 && (
-          <Card className="border-amber-500/20 bg-amber-50">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base flex items-center gap-2">
-                <UserCheck className="w-5 h-5 text-amber-600" />
-                あなたへのタスク
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {staffTasks.map((task) => (
-                  <div key={task.id} className={`bg-background rounded-lg p-3 border ${task.status === 'completed' ? 'opacity-60' : ''}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                            task.priority === 'high' ? 'bg-red-100 text-red-700' :
-                            task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-blue-100 text-blue-700'
-                          }`}>
-                            <Flag className="h-3 w-3 inline mr-0.5" />
-                            {task.priority === 'high' ? '高' : task.priority === 'medium' ? '中' : '低'}
-                          </span>
-                          <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                            task.status === 'completed' ? 'bg-green-100 text-green-700' :
-                            task.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
-                            'bg-gray-100 text-gray-700'
-                          }`}>
-                            {task.status === 'completed' ? '完了' : task.status === 'in_progress' ? '進行中' : '未着手'}
-                          </span>
-                        </div>
-                        <p className={`font-medium ${task.status === 'completed' ? 'line-through text-muted-foreground' : ''}`}>
-                          {task.title}
-                        </p>
-                        {task.description && (
-                          <p className="text-sm text-muted-foreground mt-1">{task.description}</p>
-                        )}
-                        {task.dueDate && (
-                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            期限: {task.dueDate}
-                          </p>
-                        )}
-                      </div>
-                      {todayStatus?.status === "working" && (
-                        <div className="flex gap-1">
-                          {task.status !== 'pending' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={() => handleStaffTaskStatusUpdate(task.id, 'pending')}
-                              disabled={updateStaffTaskStatusMutation.isPending}
-                            >
-                              未着手
-                            </Button>
-                          )}
-                          {task.status !== 'in_progress' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={() => handleStaffTaskStatusUpdate(task.id, 'in_progress')}
-                              disabled={updateStaffTaskStatusMutation.isPending}
-                            >
-                              進行中
-                            </Button>
-                          )}
-                          {task.status !== 'completed' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={() => handleStaffTaskStatusUpdate(task.id, 'completed')}
-                              disabled={updateStaffTaskStatusMutation.isPending}
-                            >
-                              完了
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
+        {/* エラー表示 */}
+        {(clockInMutation.isError || clockOutMutation.isError) && (
+          <Card className="border-red-200 bg-red-50">
+            <CardContent className="pt-4 flex items-center gap-2 text-red-600">
+              <AlertCircle className="w-5 h-5 flex-shrink-0" />
+              <span className="text-sm">
+                {clockInMutation.error?.message || clockOutMutation.error?.message}
+              </span>
             </CardContent>
           </Card>
         )}
-
-        {/* 状態に応じた表示 */}
-        {todayStatus?.status === "not_clocked_in" && renderClockInForm()}
-        {(todayStatus?.status === "working" || todayStatus?.status === "on_break") && renderWorkingStatus()}
-        {todayStatus?.status === "clocked_out" && renderClockedOut()}
-
-        {/* ログアウトボタン */}
-        <div className="pt-4">
-          <Button variant="outline" onClick={handleLogout} className="w-full">
-            別の従業員でログイン
-          </Button>
-        </div>
       </main>
+
+      {/* ボトムナビ */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-border">
+        <div className="max-w-md mx-auto flex">
+          <button className="flex-1 py-3 flex flex-col items-center gap-1 text-primary">
+            <Clock className="w-5 h-5" />
+            <span className="text-xs font-medium">打刻</span>
+          </button>
+          <Link href="/history" className="flex-1 py-3 flex flex-col items-center gap-1 text-muted-foreground hover:text-primary">
+            <History className="w-5 h-5" />
+            <span className="text-xs">履歴</span>
+          </Link>
+          <button
+            onClick={handleLogout}
+            className="flex-1 py-3 flex flex-col items-center gap-1 text-muted-foreground hover:text-red-500"
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="text-xs">ログアウト</span>
+          </button>
+        </div>
+      </nav>
     </div>
   );
 }

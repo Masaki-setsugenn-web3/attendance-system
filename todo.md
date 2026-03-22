@@ -82,3 +82,13 @@
 
 ## バグ修正
 - [x] スタッフタスクのステータスを進行中にすると画面から消えてしまう問題を修正
+
+## タスク機能の全削除
+- [x] スキーマからtasks、team_tasks、staff_tasksテーブルを削除
+- [x] db.tsからタスク関連クエリを削除
+- [x] routers.tsからタスク関連APIを削除
+- [x] Attendance.tsxからタスク関連UIをすべて削除
+- [x] AdminTeamTasks.tsx、AdminStaffTasks.tsxを削除
+- [x] App.tsxからタスク関連ルートを削除
+- [x] AdminDashboard.tsxからタスク関連リンクを削除
+- [x] notifications.tsを削除

@@ -189,26 +189,7 @@ export default function History() {
                     </div>
                   )}
 
-                  {/* タスク */}
-                  {record.tasks.length > 0 && (
-                    <div className="text-sm">
-                      <span className="text-muted-foreground">タスク:</span>
-                      <div className="mt-1 space-y-1">
-                        {record.tasks.map((task, i) => (
-                          <div key={i} className="flex items-center gap-2 pl-2">
-                            {task.isCompleted ? (
-                              <CheckCircle2 className="w-4 h-4 text-primary" />
-                            ) : (
-                              <AlertCircle className="w-4 h-4 text-muted-foreground" />
-                            )}
-                            <span className={task.isCompleted ? "text-muted-foreground" : ""}>
-                              {task.content}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+
 
                   {/* 振り返り */}
                   {record.reflection && (

@@ -13,10 +13,6 @@ vi.mock("./db", () => ({
   getAttendanceByEmployeeAndDate: vi.fn(),
   createAttendanceRecord: vi.fn(),
   updateAttendanceRecord: vi.fn(),
-  createTask: vi.fn(),
-  getTasksByAttendanceId: vi.fn(),
-  updateTask: vi.fn(),
-  deleteTask: vi.fn(),
   getBreaksByAttendanceId: vi.fn(),
   getActiveBreak: vi.fn(),
   createBreak: vi.fn(),
@@ -28,6 +24,7 @@ vi.mock("./db", () => ({
   getAllAttendanceByDate: vi.fn(),
   getAllAttendanceByDateRange: vi.fn(),
   getAttendanceById: vi.fn(),
+  getEmployeeById: vi.fn(),
 }));
 
 import * as db from "./db";
@@ -59,7 +56,7 @@ describe("employee router", () => {
       id: 1,
       employeeNumber: "001",
       password: "y820",
-      name: "百瀠友奈",
+      name: "百瀬友奈",
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -69,7 +66,7 @@ describe("employee router", () => {
     expect(result).toEqual(
       expect.objectContaining({
         id: 1,
-        name: "百瀠友奈",
+        name: "百瀬友奈",
       })
     );
   });
@@ -88,6 +85,10 @@ describe("employee router", () => {
 });
 
 describe("attendance router", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("returns not_clocked_in status when no record exists", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);
@@ -115,45 +116,22 @@ describe("attendance router", () => {
       clockOutTime: null,
       clockOutLatitude: null,
       clockOutLongitude: null,
-      todayGoal: "テスト目標",
+      todayGoal: null,
       reflection: null,
       isLate: false,
       isEarlyLeave: false,
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    vi.mocked(db.createTask).mockResolvedValue({
-      id: 1,
-      attendanceId: 1,
-      content: "タスク1",
-      isCompleted: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-    vi.mocked(db.getTasksByAttendanceId).mockResolvedValue([
-      {
-        id: 1,
-        attendanceId: 1,
-        content: "タスク1",
-        isCompleted: false,
-        comment: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ]);
-    vi.mocked(db.getAllAttendanceByDateRange).mockResolvedValue([]);
 
     const result = await caller.attendance.clockIn({
       employeeId: 1,
-      todayGoal: "テスト目標",
-      tasks: ["タスク1"],
       isLate: false,
       latitude: 35.6762,
       longitude: 139.6503,
     });
 
     expect(result.record).toBeDefined();
-    expect(result.tasks).toHaveLength(1);
   });
 
   it("throws error when already clocked in", async () => {
@@ -181,13 +159,16 @@ describe("attendance router", () => {
     await expect(
       caller.attendance.clockIn({
         employeeId: 1,
-        tasks: [],
       })
     ).rejects.toThrow("既に出勤打刻済みです");
   });
 });
 
 describe("admin router", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("logs in with correct password", async () => {
     const ctx = createPublicContext();
     const caller = appRouter.createCaller(ctx);

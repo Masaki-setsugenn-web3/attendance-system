@@ -4,11 +4,8 @@ import {
   InsertUser, users, 
   employees, InsertEmployee, Employee,
   attendanceRecords, InsertAttendanceRecord, AttendanceRecord,
-  tasks, InsertTask, Task,
   breaks, InsertBreak, Break,
   adminSettings, InsertAdminSetting,
-  teamTasks, InsertTeamTask, TeamTask,
-  staffTasks, InsertStaffTask, StaffTask
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -137,7 +134,7 @@ export async function initializeEmployees(): Promise<void> {
   if (!db) throw new Error("Database not available");
   
   const initialEmployees = [
-    { employeeNumber: "001", password: "y820", name: "百瀠友奈" },
+    { employeeNumber: "001", password: "y820", name: "百瀬友奈" },
     { employeeNumber: "002", password: "m110", name: "中井真樹" },
     { employeeNumber: "A-003", password: "m212", name: "高橋美月" },
   ];
@@ -265,38 +262,6 @@ export async function getAttendanceById(id: number): Promise<AttendanceRecord | 
   return result[0];
 }
 
-// ========== Task Functions ==========
-export async function createTask(data: InsertTask): Promise<Task> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  const result = await db.insert(tasks).values(data);
-  const insertId = result[0].insertId;
-  const [task] = await db.select().from(tasks).where(eq(tasks.id, insertId));
-  return task;
-}
-
-export async function getTasksByAttendanceId(attendanceId: number): Promise<Task[]> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  return db.select().from(tasks).where(eq(tasks.attendanceId, attendanceId));
-}
-
-export async function updateTask(id: number, data: Partial<InsertTask>): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  await db.update(tasks).set(data).where(eq(tasks.id, id));
-}
-
-export async function deleteTask(id: number): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  await db.delete(tasks).where(eq(tasks.id, id));
-}
-
 // ========== Break Functions ==========
 export async function createBreak(data: InsertBreak): Promise<Break> {
   const db = await getDb();
@@ -362,160 +327,4 @@ export async function initializeAdminPassword(): Promise<void> {
   if (!existingPassword) {
     await setAdminSetting("admin_password", "admin123");
   }
-}
-
-// ========== Team Task Functions ==========
-export async function createTeamTask(data: InsertTeamTask): Promise<TeamTask> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  const result = await db.insert(teamTasks).values(data);
-  const insertId = result[0].insertId;
-  const [task] = await db.select().from(teamTasks).where(eq(teamTasks.id, insertId));
-  return task;
-}
-
-export async function updateTeamTask(id: number, data: Partial<InsertTeamTask>): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  await db.update(teamTasks).set(data).where(eq(teamTasks.id, id));
-}
-
-export async function deleteTeamTask(id: number): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  await db.delete(teamTasks).where(eq(teamTasks.id, id));
-}
-
-export async function getTeamTasksByPeriod(taskType: "weekly" | "monthly", period: string): Promise<TeamTask[]> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  return db.select()
-    .from(teamTasks)
-    .where(and(
-      eq(teamTasks.taskType, taskType),
-      eq(teamTasks.period, period),
-      eq(teamTasks.isActive, true)
-    ))
-    .orderBy(desc(teamTasks.createdAt));
-}
-
-export async function getAllTeamTasks(): Promise<TeamTask[]> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  return db.select()
-    .from(teamTasks)
-    .orderBy(desc(teamTasks.createdAt));
-}
-
-export async function getActiveTeamTasks(): Promise<TeamTask[]> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  return db.select()
-    .from(teamTasks)
-    .where(eq(teamTasks.isActive, true))
-    .orderBy(desc(teamTasks.createdAt));
-}
-
-export async function getTeamTaskById(id: number): Promise<TeamTask | undefined> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  const result = await db.select().from(teamTasks).where(eq(teamTasks.id, id)).limit(1);
-  return result[0];
-}
-
-// ========== Staff Task Functions ==========
-export async function createStaffTask(data: InsertStaffTask): Promise<StaffTask> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  const result = await db.insert(staffTasks).values(data);
-  const insertId = result[0].insertId;
-  const [task] = await db.select().from(staffTasks).where(eq(staffTasks.id, insertId));
-  return task;
-}
-
-export async function updateStaffTask(id: number, data: Partial<InsertStaffTask>): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  await db.update(staffTasks).set(data).where(eq(staffTasks.id, id));
-}
-
-export async function deleteStaffTask(id: number): Promise<void> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  await db.delete(staffTasks).where(eq(staffTasks.id, id));
-}
-
-export async function getStaffTasksByEmployeeId(employeeId: number): Promise<StaffTask[]> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  return db.select()
-    .from(staffTasks)
-    .where(eq(staffTasks.employeeId, employeeId))
-    .orderBy(desc(staffTasks.createdAt));
-}
-
-export async function getActiveStaffTasksByEmployeeId(employeeId: number): Promise<StaffTask[]> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  return db.select()
-    .from(staffTasks)
-    .where(eq(staffTasks.employeeId, employeeId))
-    .orderBy(staffTasks.dueDate);
-}
-
-export async function getAllStaffTasks(): Promise<(StaffTask & { employeeName: string })[]> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  const allTasks = await db.select()
-    .from(staffTasks)
-    .orderBy(desc(staffTasks.createdAt));
-  
-  const result: (StaffTask & { employeeName: string })[] = [];
-  for (const task of allTasks) {
-    const employee = await getEmployeeById(task.employeeId);
-    result.push({
-      ...task,
-      employeeName: employee?.name || "Unknown"
-    });
-  }
-  return result;
-}
-
-export async function getStaffTaskById(id: number): Promise<StaffTask | undefined> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  const result = await db.select().from(staffTasks).where(eq(staffTasks.id, id)).limit(1);
-  return result[0];
-}
-
-export async function getUncompletedTasksFromPreviousDay(employeeId: number, currentDate: string): Promise<Task[]> {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  
-  // 前日の日付を計算
-  const date = new Date(currentDate);
-  date.setDate(date.getDate() - 1);
-  const previousDate = date.toISOString().split('T')[0];
-  
-  // 前日の勤怠記録を取得
-  const prevRecord = await getAttendanceByEmployeeAndDate(employeeId, previousDate);
-  if (!prevRecord) return [];
-  
-  // 未完了タスクを取得
-  const prevTasks = await getTasksByAttendanceId(prevRecord.id);
-  return prevTasks.filter(t => !t.isCompleted);
 }

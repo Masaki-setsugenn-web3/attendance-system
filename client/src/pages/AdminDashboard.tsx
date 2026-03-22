@@ -11,7 +11,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Table,
@@ -24,12 +23,10 @@ import {
 import { trpc } from "@/lib/trpc";
 import { useLocation, Link } from "wouter";
 import {
-  ArrowLeft, Calendar, MapPin, Settings, LogOut,
-  Loader2, Edit, Users, Clock, ExternalLink, FileSpreadsheet, ListTodo, ClipboardList, CheckCircle2, Circle, UserCheck
+  Calendar, MapPin, Settings, LogOut,
+  Loader2, Edit, Users, Clock, FileSpreadsheet
 } from "lucide-react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface AttendanceRecord {
   id: number;
@@ -46,7 +43,6 @@ interface AttendanceRecord {
   reflection: string | null;
   isLate: boolean | null;
   isEarlyLeave: boolean | null;
-  tasks: { id: number; content: string; isCompleted: boolean | null; comment: string | null }[];
   breaks: { id: number; startTime: Date; endTime: Date | null }[];
 }
 
@@ -57,7 +53,6 @@ export default function AdminDashboard() {
     return new Date().toISOString().split("T")[0];
   });
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
-  const [viewingTasksRecord, setViewingTasksRecord] = useState<AttendanceRecord | null>(null);
   const [editForm, setEditForm] = useState({
     clockInTime: "",
     clockOutTime: "",
@@ -187,27 +182,12 @@ export default function AdminDashboard() {
         <div className="container py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Link href="/attendance">
-                <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
-                  <ArrowLeft className="w-5 h-5" />
-                </Button>
-              </Link>
               <div>
                 <h1 className="text-lg font-semibold">管理者ダッシュボード</h1>
                 <p className="text-sm opacity-90">勤怠管理</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Link href="/admin/team-tasks">
-                <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
-                  <ListTodo className="w-5 h-5" />
-                </Button>
-              </Link>
-              <Link href="/admin/staff-tasks">
-                <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
-                  <UserCheck className="w-5 h-5" />
-                </Button>
-              </Link>
               <Link href="/admin/map">
                 <Button variant="ghost" size="icon" className="text-primary-foreground hover:bg-primary-foreground/10">
                   <MapPin className="w-5 h-5" />
@@ -350,7 +330,7 @@ export default function AdminDashboard() {
                       <TableHead>退勤</TableHead>
                       <TableHead>状態</TableHead>
                       <TableHead>位置</TableHead>
-                      <TableHead>タスク詳細</TableHead>
+                      <TableHead>目標・振り返り</TableHead>
                       <TableHead>編集</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -363,7 +343,7 @@ export default function AdminDashboard() {
                         <TableCell>{formatTime(record.clockInTime)}</TableCell>
                         <TableCell>{formatTime(record.clockOutTime)}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
+                          <div className="flex gap-1 flex-wrap">
                             {record.isLate && (
                               <span className="text-xs px-2 py-0.5 bg-destructive/10 text-destructive rounded">
                                 遅刻
@@ -388,7 +368,7 @@ export default function AdminDashboard() {
                                 href={getGoogleMapsUrl(record.clockInLatitude, record.clockInLongitude)!}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-primary hover:underline flex items-center gap-1"
+                                className="text-primary hover:underline flex items-center gap-1 text-sm"
                               >
                                 <MapPin className="w-3 h-3" />
                                 出勤
@@ -399,7 +379,7 @@ export default function AdminDashboard() {
                                 href={getGoogleMapsUrl(record.clockOutLatitude, record.clockOutLongitude)!}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-primary hover:underline flex items-center gap-1"
+                                className="text-primary hover:underline flex items-center gap-1 text-sm"
                               >
                                 <MapPin className="w-3 h-3" />
                                 退勤
@@ -408,17 +388,18 @@ export default function AdminDashboard() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="flex items-center gap-2"
-                            onClick={() => setViewingTasksRecord(record as AttendanceRecord)}
-                          >
-                            <ClipboardList className="w-4 h-4" />
-                            <span className="hidden md:inline">
-                              {record.tasks.filter(t => t.isCompleted).length}/{record.tasks.length}
-                            </span>
-                          </Button>
+                          <div className="text-sm space-y-1">
+                            {record.todayGoal && (
+                              <p className="text-muted-foreground truncate max-w-[150px]" title={record.todayGoal}>
+                                目標: {record.todayGoal}
+                              </p>
+                            )}
+                            {record.reflection && (
+                              <p className="text-muted-foreground truncate max-w-[150px]" title={record.reflection}>
+                                振り返り: {record.reflection}
+                              </p>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Button
@@ -444,96 +425,6 @@ export default function AdminDashboard() {
         </Card>
       </main>
 
-      {/* タスク詳細ダイアログ */}
-      <Dialog open={!!viewingTasksRecord} onOpenChange={() => setViewingTasksRecord(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh]">
-          <DialogHeader>
-            <DialogTitle>{viewingTasksRecord?.employeeName}さんの業務報告</DialogTitle>
-            <DialogDescription>
-              {viewingTasksRecord?.date} の業務内容詳細
-            </DialogDescription>
-          </DialogHeader>
-          
-          <ScrollArea className="h-[50vh] pr-4">
-            <div className="space-y-6">
-              {/* 今日の目標 */}
-              <div className="space-y-2">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <div className="w-1 h-6 bg-primary rounded-full"></div>
-                  今日の目標
-                </h3>
-                <Card>
-                  <CardContent className="pt-4 pb-4 bg-muted/30">
-                    <p className="text-base">
-                      {viewingTasksRecord?.todayGoal || "設定なし"}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* タスク一覧 */}
-              <div className="space-y-2">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <div className="w-1 h-6 bg-blue-500 rounded-full"></div>
-                  タスク進捗
-                  <Badge variant="outline" className="ml-2">
-                    {viewingTasksRecord?.tasks.filter(t => t.isCompleted).length}/{viewingTasksRecord?.tasks.length} 完了
-                  </Badge>
-                </h3>
-                <div className="space-y-3">
-                  {viewingTasksRecord?.tasks.map((task) => (
-                    <Card key={task.id} className={task.isCompleted ? "border-green-200 bg-green-50/30" : ""}>
-                      <CardContent className="p-4">
-                        <div className="flex items-start gap-3">
-                          {task.isCompleted ? (
-                            <CheckCircle2 className="w-5 h-5 text-green-500 mt-0.5 shrink-0" />
-                          ) : (
-                            <Circle className="w-5 h-5 text-muted-foreground mt-0.5 shrink-0" />
-                          )}
-                          <div className="space-y-2 w-full">
-                            <p className={task.isCompleted ? "line-through text-muted-foreground" : ""}>
-                              {task.content}
-                            </p>
-                            {task.comment && (
-                              <div className="bg-muted p-2 rounded text-sm text-muted-foreground mt-2">
-                                <span className="font-semibold text-xs block mb-1">コメント:</span>
-                                {task.comment}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                  {viewingTasksRecord?.tasks.length === 0 && (
-                    <p className="text-muted-foreground text-center py-4">タスクはありません</p>
-                  )}
-                </div>
-              </div>
-
-              {/* 振り返り */}
-              <div className="space-y-2">
-                <h3 className="font-semibold text-lg flex items-center gap-2">
-                  <div className="w-1 h-6 bg-orange-500 rounded-full"></div>
-                  一日の振り返り
-                </h3>
-                <Card>
-                  <CardContent className="pt-4 pb-4 bg-muted/30">
-                    <p className="text-base whitespace-pre-wrap">
-                      {viewingTasksRecord?.reflection || "未入力"}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-          </ScrollArea>
-
-          <DialogFooter>
-            <Button onClick={() => setViewingTasksRecord(null)}>閉じる</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* 編集ダイアログ */}
       <Dialog open={!!editingRecord} onOpenChange={() => setEditingRecord(null)}>
         <DialogContent>
@@ -550,10 +441,7 @@ export default function AdminDashboard() {
                 id="clockInTime"
                 type="datetime-local"
                 value={editForm.clockInTime}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, clockInTime: e.target.value })
-                }
-                className="mt-1"
+                onChange={(e) => setEditForm({ ...editForm, clockInTime: e.target.value })}
               />
             </div>
             <div>
@@ -562,31 +450,26 @@ export default function AdminDashboard() {
                 id="clockOutTime"
                 type="datetime-local"
                 value={editForm.clockOutTime}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, clockOutTime: e.target.value })
-                }
-                className="mt-1"
+                onChange={(e) => setEditForm({ ...editForm, clockOutTime: e.target.value })}
               />
             </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="editIsLate"
-                checked={editForm.isLate}
-                onCheckedChange={(checked) =>
-                  setEditForm({ ...editForm, isLate: checked === true })
-                }
-              />
-              <Label htmlFor="editIsLate">遅刻</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="editIsEarlyLeave"
-                checked={editForm.isEarlyLeave}
-                onCheckedChange={(checked) =>
-                  setEditForm({ ...editForm, isEarlyLeave: checked === true })
-                }
-              />
-              <Label htmlFor="editIsEarlyLeave">早退</Label>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="isLate"
+                  checked={editForm.isLate}
+                  onCheckedChange={(checked) => setEditForm({ ...editForm, isLate: !!checked })}
+                />
+                <Label htmlFor="isLate">遅刻</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="isEarlyLeave"
+                  checked={editForm.isEarlyLeave}
+                  onCheckedChange={(checked) => setEditForm({ ...editForm, isEarlyLeave: !!checked })}
+                />
+                <Label htmlFor="isEarlyLeave">早退</Label>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -595,9 +478,10 @@ export default function AdminDashboard() {
             </Button>
             <Button onClick={handleUpdate} disabled={updateMutation.isPending}>
               {updateMutation.isPending ? (
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-              ) : null}
-              保存
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "更新"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
